@@ -3,7 +3,7 @@ rm(list=ls())
 
 #install.packages("bigrquery")
 
-#How to pull stuff down from Big Query to R, seems like 100k max row pull
+#How to pull stuff down from Big Query to R, seems like there are certain limitations, try out your own queries
 library(bigrquery)
 
 project_id <- "peardeck-external-projects"
