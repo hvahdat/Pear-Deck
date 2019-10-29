@@ -1,3 +1,6 @@
+#website I referenced in case you want to check it out
+#https://www.blendo.co/blog/access-data-google-bigquery-python-r/
+
 #Clear environment
 rm(list=ls()) 
 
