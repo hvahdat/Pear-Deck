@@ -1,0 +1,347 @@
+---
+title: "Pear Deck"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+#####################
+# SETUP STEPS
+#####################
+
+# Clear environment
+rm(list=ls()) 
+
+# Capture start time
+code_start_time <- Sys.time()
+
+# Load libraries
+library(bigrquery)
+library(reshape2)
+library(ggplot2)
+library(tidyverse)
+library(scales)
+
+# Set working directory
+setwd("C:\\Users\\katie\\Dropbox\\Grad School - Business Analytics Masters Program\\2019 Fall Classes\\Pear Deck - Analytics Experience\\R Scripts")
+
+# Data pull setup
+project_id <- "peardeck-external-projects"
+
+#####################
+# SETUP NOTES
+#####################
+
+# Website on how to connect to Google BigQuery in R: https://www.blendo.co/blog/access-data-google-bigquery-python-r/
+# https://www.rdocumentation.org/packages/bigrquery/versions/1.2.0/topics/bq_query
+
+# https://www.datacamp.com/community/tutorials/long-wide-data-R
+
+# install.packages("bigrquery")
+# install.packages("DescTools")
+```
+
+```{r}
+#####################
+# DATA PULL: Student_responses
+#####################
+
+sql_string <- "SELECT CAST(teacher AS STRING) AS teacher, DATE(timestamp) AS Date, EXTRACT(HOUR FROM timestamp) AS hour, COUNT(DISTINCT presentation) AS num_presentations, COUNT(DISTINCT student) as num_students FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` WHERE lower(app) not like '%flash%' AND DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31' AND teacher NOT IN (SELECT externalid FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` WHERE DATE(firstseen) >= '2019-10-01') GROUP BY teacher, DATE(timestamp), EXTRACT(HOUR FROM timestamp)"
+
+# Pull data
+# Approximate run time: 7.3 min
+query_start_time <- Sys.time()
+df_sr <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf) #, allowLargeResults = TRUE
+query_end_time <- Sys.time()
+query_runtime <- query_end_time - query_start_time
+print(round(query_runtime,1))
+
+# Add field of date in YYYY-MM format
+df_sr$Date_year_month <- format(df_sr$Date, format="%Y-%m")
+
+# Create summary
+df_sr <- group_by(df_sr, teacher, Date_year_month)
+summ  <- summarize(df_sr, num_presentations = sum(num_presentations)) 
+df_sr <- ungroup(df_sr)
+
+# Create wide df
+df_sr_wide <- dcast(summ, teacher ~ Date_year_month, value.var="num_presentations")
+
+# Create new col in df_sr_wide: total_presentations & total_months
+summ <- group_by(summ, teacher)
+summ2 <- summarize(summ, num_presentations = sum(num_presentations)) 
+summ3 <- summarize(summ, total_months = n()) 
+summ <- ungroup(summ)
+df_sr_wide$total_presentations <- summ2$num_presentations
+df_sr_wide$total_months <- summ3$total_months
+
+# df_sr_wide: Set NAs to 0 (important for calculation of average and SD later)
+df_sr_wide[is.na(df_sr_wide)] <- 0 
+
+# Create df_sr_long (for summaries later)
+df_sr_long <- melt(df_sr_wide[,1:(ncol(df_sr_wide)-2)], measure.vars = 2:(ncol(df_sr_wide)-2))
+colnames(df_sr_long)[2] = "Date_year_month"
+colnames(df_sr_long)[3] = "num_presentations"
+
+# Remove unnecessary dfs
+rm(list = c("summ","summ2","summ3"))
+```
+
+```{r}
+#####################
+# DATA PULL: user_facts_anonymized
+#####################
+
+sql_string <- "SELECT DISTINCT CAST(externalid AS STRING) AS externalid, profile_role, firstseen, CAST(domain AS STRING) as domain, firstpremiumtime, premiumstatusatsignup, accountType, expirationdate, trial_end, coupon_medium FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` ON `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized`.externalid = `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses`.teacher WHERE DATE(firstseen) < '2019-10-01' AND lower(app) not like '%flash%' AND DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31'"
+
+# Pull data
+# Run time: 1 min
+query_start_time <- Sys.time()
+df_uf <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
+query_end_time <- Sys.time()
+query_runtime <- query_end_time - query_start_time
+print(round(query_runtime,1))
+
+```
+
+
+```{r, fig.width=20,fig.height=7}
+#####################
+# EXPLORE: usage over time USING LONG VERSION (includes num_presentations = 0)
+#####################
+
+# Create usage summary by Year/Month
+df_sr_long$Date_year_month_2 <- as.Date(paste(df_sr_long$Date_year_month, "-01", sep=""))
+
+df_sr_long <- group_by(df_sr_long, Date_year_month_2, teacher)
+summ_vIn0_yearmonth_teacher <- summarize(df_sr_long, total_pres = sum(num_presentations))
+df_sr_long <- ungroup(df_sr_long)
+
+summ_vIn0_yearmonth_teacher <- group_by(summ_vIn0_yearmonth_teacher, Date_year_month_2)
+summ_vIn0_yearmonth <- summarize(summ_vIn0_yearmonth_teacher, total_presentations = sum(total_pres), total_presentations_avg = round(mean(total_pres),0), total_presentations_sd = round(sd(total_pres),1))
+summ_vIn0_yearmonth_teacher <- ungroup(summ_vIn0_yearmonth_teacher)
+
+
+# By Month: count
+
+p <- ggplot(data=summ_vIn0_yearmonth, aes(x=Date_year_month_2, y=total_presentations)) +
+  geom_bar(stat="identity") + 
+  scale_y_continuous(name = "Total Presentations", labels = scales::comma) +  # unit_format(unit = "K")
+  scale_x_date(name = "Year/Month", date_breaks = "1 month", date_labels = "%Y-%m") + 
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Presentations by Month") + 
+  theme(text = element_text(size = 14)) + 
+  theme(axis.text.x = element_text(angle = 45))
+
+ggsave(filename = "chart_bymonth_count_bar(vIn0).png", plot = p, width = 20, height = 7, units = "in")
+
+# By Month: average
+
+p <- ggplot(data=summ_vIn0_yearmonth, aes(x=Date_year_month_2, y=total_presentations_avg)) +
+  geom_bar(stat="identity") + 
+  scale_y_continuous(name = "Average Total Presentations", labels = scales::comma, breaks = 0:(max(summ_vIn0_yearmonth$total_presentations_avg))) +  # unit_format(unit = "K")
+  scale_x_date(name = "Year/Month", date_breaks = "1 month", date_labels = "%Y-%m") + 
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Average # Presentations by Month") + 
+  theme(text = element_text(size = 14)) + 
+  theme(axis.text.x = element_text(angle = 45))
+
+ggsave(filename = "chart_bymonth_avg_bar(vIn0).png", plot = p, width = 20, height = 7, units = "in")
+
+
+# By Month: standard deviation
+
+p <- ggplot(data=summ_vIn0_yearmonth, aes(x=Date_year_month_2, y=total_presentations_sd)) +
+  geom_bar(stat="identity") + 
+  scale_y_continuous(name = "Total Presentations Standard Deviation", labels = scales::comma) +  # unit_format(unit = "K")
+  scale_x_date(name = "Year/Month", date_breaks = "1 month", date_labels = "%Y-%m") + 
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Standard Deviation # Presentations by Month") + 
+  theme(text = element_text(size = 14)) + 
+  theme(axis.text.x = element_text(angle = 45))
+
+ggsave(filename = "chart_bymonth_sd_bar(vIn0).png", plot = p, width = 20, height = 7, units = "in")
+
+# # By Week: count
+# 
+# # Scatter plot w/ trend line
+# p <- ggplot(data=df_sr, aes(x=Date, y=num_presentations)) +
+#   geom_point(stat="identity") + 
+#   geom_smooth() +
+#   scale_x_date(name = "Year/Week", date_breaks = "1 week", date_labels = "%Y-%m-%d") + 
+#   theme(panel.grid.minor.y = element_blank()) +
+#   theme(panel.background = element_blank()) +
+#   ggtitle("Presentations by Week") +
+#   theme(text = element_text(size = 14)) +
+#   theme(axis.text.x = element_text(angle = 45))
+# 
+# ggsave(filename = "chart_byweek_scatter.png", plot = p, width = 85, height = 7, units = "in", limitsize = FALSE)
+
+# # Line plot
+# p <- ggplot(data=df_sr, aes(x=Date, y=num_presentations)) +
+#   geom_line(stat="identity") +
+#   scale_x_date(name = "Year/Week", date_breaks = "1 week", date_labels = "%Y-%m-%d") + 
+#   theme(panel.grid.minor.y = element_blank()) +
+#   theme(panel.background = element_blank()) +
+#   ggtitle("Presentations by Week") +
+#   theme(text = element_text(size = 14)) +
+#   theme(axis.text.x = element_text(angle = 45))
+# 
+# ggsave(filename = "chart_byweek_line.png", plot = p, width = 85, height = 7, units = "in", limitsize = FALSE)
+# 
+# # By Week: average
+# 
+# #Add field of date in YYYY-WW format
+# df_sr$Date_year_week <- as.numeric(format(df_sr$Date, format="%Y%V"))
+# 
+# #Add summary table NOTE: all 1s
+# df_sr <- group_by(df_sr, Date_year_week)
+# summ_by_Year_week <- summarize(df_sr, total_presentations_avg = round(mean(num_presentations),0), total_presentations_sd = round(sd(num_presentations),1))
+# df_sr <- ungroup(df_sr)
+
+```
+
+```{r, fig.width=20,fig.height=7}
+#####################
+# EXPLORE: usage over time - EXCLUDES NUM_PRESENTATIONS = 0
+#####################
+
+# Create usage summary by Year/Month
+df_sr$Date_year_month_2 <- as.Date(paste(df_sr$Date_year_month, "-01", sep=""))
+
+df_sr <- group_by(df_sr, Date_year_month_2, teacher)
+summ_vEx0_yearmonth_teacher <- summarize(df_sr, total_pres = sum(num_presentations))
+df_sr <- ungroup(df_sr)
+
+summ_vEx0_yearmonth_teacher <- group_by(summ_vEx0_yearmonth_teacher, Date_year_month_2)
+summ_vEx0_yearmonth <- summarize(summ_vEx0_yearmonth_teacher, total_presentations = sum(total_pres), total_presentations_avg = round(mean(total_pres),0), total_presentations_sd = round(sd(total_pres),1))
+summ_vEx0_yearmonth_teacher <- ungroup(summ_vEx0_yearmonth_teacher)
+
+
+# By Month: count
+
+p <- ggplot(data=summ_vEx0_yearmonth, aes(x=Date_year_month_2, y=total_presentations)) +
+  geom_bar(stat="identity") + 
+  scale_y_continuous(name = "Total Presentations", labels = scales::comma) +  # unit_format(unit = "K")
+  scale_x_date(name = "Year/Month", date_breaks = "1 month", date_labels = "%Y-%m") + 
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Presentations by Month") + 
+  theme(text = element_text(size = 14)) + 
+  theme(axis.text.x = element_text(angle = 45))
+
+ggsave(filename = "chart_bymonth_count_bar(vEx0).png", plot = p, width = 20, height = 7, units = "in")
+
+# By Month: average
+
+p <- ggplot(data=summ_vEx0_yearmonth, aes(x=Date_year_month_2, y=total_presentations_avg)) +
+  geom_bar(stat="identity") + 
+  scale_y_continuous(name = "Average Total Presentations", labels = scales::comma) +  # unit_format(unit = "K")
+  scale_x_date(name = "Year/Month", date_breaks = "1 month", date_labels = "%Y-%m") + 
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Average # Presentations by Month") + 
+  theme(text = element_text(size = 14)) + 
+  theme(axis.text.x = element_text(angle = 45))
+
+ggsave(filename = "chart_bymonth_avg_bar(vEx0).png", plot = p, width = 20, height = 7, units = "in")
+
+
+# By Month: standard deviation
+
+p <- ggplot(data=summ_vEx0_yearmonth, aes(x=Date_year_month_2, y=total_presentations_sd)) +
+  geom_bar(stat="identity") + 
+  scale_y_continuous(name = "Total Presentations Standard Deviation", labels = scales::comma) +  # unit_format(unit = "K")
+  scale_x_date(name = "Year/Month", date_breaks = "1 month", date_labels = "%Y-%m") + 
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Standard Deviation # Presentations by Month") + 
+  theme(text = element_text(size = 14)) + 
+  theme(axis.text.x = element_text(angle = 45))
+
+ggsave(filename = "chart_bymonth_sd_bar(vEx0).png", plot = p, width = 20, height = 7, units = "in")
+
+# By Week: count
+
+# Scatter plot w/ trend line
+p <- ggplot(data=df_sr, aes(x=Date, y=num_presentations)) +
+  geom_point(stat="identity") + 
+  geom_smooth() +
+  scale_x_date(name = "Year/Week", date_breaks = "1 week", date_labels = "%Y-%m-%d") + 
+  theme(panel.grid.minor.y = element_blank()) +
+  theme(panel.background = element_blank()) +
+  ggtitle("Presentations by Week") +
+  theme(text = element_text(size = 14)) +
+  theme(axis.text.x = element_text(angle = 45))
+
+ggsave(filename = "chart_byweek_scatter(vEx0).png", plot = p, width = 85, height = 7, units = "in", limitsize = FALSE)
+
+# Line plot
+p <- ggplot(data=df_sr, aes(x=Date, y=num_presentations)) +
+  geom_line(stat="identity") +
+  scale_x_date(name = "Year/Week", date_breaks = "1 week", date_labels = "%Y-%m-%d") + 
+  theme(panel.grid.minor.y = element_blank()) +
+  theme(panel.background = element_blank()) +
+  ggtitle("Presentations by Week") +
+  theme(text = element_text(size = 14)) +
+  theme(axis.text.x = element_text(angle = 45))
+
+ggsave(filename = "chart_byweek_line(vEx0).png", plot = p, width = 85, height = 7, units = "in", limitsize = FALSE)
+
+# By Week: average
+
+#Add field of date in YYYY-WW format
+df_sr$Date_year_week <- as.numeric(format(df_sr$Date, format="%Y%V"))
+
+#Add summary table NOTE: all 1s
+df_sr <- group_by(df_sr, Date_year_week)
+summ_vEx0_by_Year_week <- summarize(df_sr, total_presentations_avg = round(mean(num_presentations),0), total_presentations_sd = round(sd(num_presentations),1))
+df_sr <- ungroup(df_sr)
+
+```
+
+
+```{r}
+#####################
+# EXPLORE: Number of students for a presentation
+#####################
+p <- 
+  qplot(df_sr$num_students, geom="histogram", binwidth = 5) +
+  #ggplot(data=df_sr, aes(df_sr$num_students)) +
+  #geom_histogram(stat="identity") + 
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_continuous(name="Number of Students") +
+  coord_cartesian(xlim = c(0, 60)) +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Students Per Presentation") + 
+  theme(text = element_text(size = 14)) #+ 
+ # theme(axis.text.x = element_text(angle = 45))
+print(p)
+
+p <- 
+  qplot(df_sr$num_students, geom="histogram", binwidth = 1) +
+  #ggplot(data=df_sr, aes(df_sr$num_students)) +
+  #geom_histogram(stat="identity") + 
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_continuous(name="Number of Students: Zoomed into small numbers", breaks =c(1:10)) +
+  coord_cartesian(xlim = c(0, 10)) +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Students Per Presentation") + 
+  theme(text = element_text(size = 14)) #+ 
+ # theme(axis.text.x = element_text(angle = 45))
+print(p)
+```
+
+
+```{r}
+# Calculate total code runtime
+code_end_time <- Sys.time()
+code_runtime <- code_end_time - code_start_time
+print(round(code_runtime,1))
+```
