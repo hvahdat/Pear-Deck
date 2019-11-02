@@ -23,8 +23,9 @@ library(ggplot2)
 library(tidyverse)
 library(scales)
 
+#When sharing files comment this out, you NOOB :)
 # Set working directory
-setwd("C:\\Users\\katie\\Dropbox\\Grad School - Business Analytics Masters Program\\2019 Fall Classes\\Pear Deck - Analytics Experience\\R Scripts")
+#setwd("C:\\Users\\katie\\Dropbox\\Grad School - Business Analytics Masters Program\\2019 Fall Classes\\Pear Deck - Analytics #Experience\\R Scripts")
 
 # Data pull setup
 project_id <- "peardeck-external-projects"
