@@ -309,33 +309,32 @@ df_sr <- ungroup(df_sr)
 #####################
 # EXPLORE: Number of students for a presentation
 #####################
+
+breaks <- 5*(0:12)
+
 p <- 
   qplot(df_sr$num_students, geom="histogram", binwidth = 5) +
-  #ggplot(data=df_sr, aes(df_sr$num_students)) +
-  #geom_histogram(stat="identity") + 
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
-  scale_x_continuous(name="Number of Students") +
+  scale_x_continuous(name="Number of Students", breaks = breaks) +
   coord_cartesian(xlim = c(0, 60)) +
   theme(panel.grid.minor.y = element_blank()) + 
   theme(panel.background = element_blank()) +
-  ggtitle("Students Per Presentation") + 
-  theme(text = element_text(size = 14)) #+ 
- # theme(axis.text.x = element_text(angle = 45))
-print(p)
+  ggtitle("Students Per Presentation: Zoomed into bulk of distribution") + 
+  theme(text = element_text(size = 14)) 
+
+ggsave(filename = "Students Per Presentation.png", plot = p, width = 10, height = 7, units = "in") 
 
 p <- 
   qplot(df_sr$num_students, geom="histogram", binwidth = 1) +
-  #ggplot(data=df_sr, aes(df_sr$num_students)) +
-  #geom_histogram(stat="identity") + 
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
-  scale_x_continuous(name="Number of Students: Zoomed into small numbers", breaks =c(1:10)) +
+  scale_x_continuous(name="Number of Students", breaks =c(1:10)) +
   coord_cartesian(xlim = c(0, 10)) +
   theme(panel.grid.minor.y = element_blank()) + 
   theme(panel.background = element_blank()) +
-  ggtitle("Students Per Presentation") + 
-  theme(text = element_text(size = 14)) #+ 
- # theme(axis.text.x = element_text(angle = 45))
-print(p)
+  ggtitle("Students Per Presentation: Zoomed into low numbers") + 
+  theme(text = element_text(size = 14)) 
+
+ggsave(filename = "Students Per Presentation (zoomed in small).png", plot = p) 
 ```
 
 
