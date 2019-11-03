@@ -16,19 +16,25 @@ rm(list=ls())
 # Capture start time
 code_start_time <- Sys.time()
 
+# Install packages (if needed)
+#install.packages("zoo")
+
 # Load libraries
 library(bigrquery)
 library(reshape2)
 library(ggplot2)
 library(tidyverse)
 library(scales)
+library(zoo)
 
-#When sharing files comment this out, you NOOB :)
 # Set working directory
-#setwd("C:\\Users\\katie\\Dropbox\\Grad School - Business Analytics Masters Program\\2019 Fall Classes\\Pear Deck - Analytics #Experience\\R Scripts")
+setwd("C:\\Users\\katie\\Dropbox\\Grad School - Business Analytics Masters Program\\2019 Fall Classes\\Pear Deck - Analytics Experience\\R Scripts")
 
 # Data pull setup
 project_id <- "peardeck-external-projects"
+
+# Set upper limit date to included usage data 
+upper_limit_date <- "2019-10-31"
 
 #####################
 # SETUP NOTES
@@ -61,32 +67,6 @@ print(round(query_runtime,1))
 # Add field of date in YYYY-MM format
 df_sr$Date_year_month <- format(df_sr$Date, format="%Y-%m")
 
-# Create summary
-df_sr <- group_by(df_sr, teacher, Date_year_month)
-summ  <- summarize(df_sr, num_presentations = sum(num_presentations)) 
-df_sr <- ungroup(df_sr)
-
-# Create wide df
-df_sr_wide <- dcast(summ, teacher ~ Date_year_month, value.var="num_presentations")
-
-# Create new col in df_sr_wide: total_presentations & total_months
-summ <- group_by(summ, teacher)
-summ2 <- summarize(summ, num_presentations = sum(num_presentations)) 
-summ3 <- summarize(summ, total_months = n()) 
-summ <- ungroup(summ)
-df_sr_wide$total_presentations <- summ2$num_presentations
-df_sr_wide$total_months <- summ3$total_months
-
-# df_sr_wide: Set NAs to 0 (important for calculation of average and SD later)
-df_sr_wide[is.na(df_sr_wide)] <- 0 
-
-# Create df_sr_long (for summaries later)
-df_sr_long <- melt(df_sr_wide[,1:(ncol(df_sr_wide)-2)], measure.vars = 2:(ncol(df_sr_wide)-2))
-colnames(df_sr_long)[2] = "Date_year_month"
-colnames(df_sr_long)[3] = "num_presentations"
-
-# Remove unnecessary dfs
-rm(list = c("summ","summ2","summ3"))
 ```
 
 ```{r}
@@ -103,6 +83,139 @@ df_uf <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, ma
 query_end_time <- Sys.time()
 query_runtime <- query_end_time - query_start_time
 print(round(query_runtime,1))
+
+```
+
+```{r}
+#####################
+# CREATE DFs: df_sr_wide & df_sr_long
+#####################
+
+### Presentations for year/month
+
+# Create summary: presentations by year/month
+df_sr <- group_by(df_sr, teacher, Date_year_month)
+summ  <- summarize(df_sr, num_presentations = sum(num_presentations)) 
+df_sr <- ungroup(df_sr)
+
+# Create wide df
+df_sr_wide <- dcast(summ, teacher ~ Date_year_month, value.var="num_presentations")
+
+# Create new col in df_sr_wide: total_presentations & total_months_used
+summ <- group_by(summ, teacher)
+summ2 <- summarize(summ, num_presentations = sum(num_presentations)) 
+summ3 <- summarize(summ, total_months_used = n()) 
+summ <- ungroup(summ)
+
+# df_sr_wide: Set NAs to 0 (important for calculation of average and SD later)
+df_sr_wide[is.na(df_sr_wide)] <- 0 
+
+# Create df_sr_long of presentations by year/month (for summaries later)
+df_sr_long <- melt(df_sr_wide[,1:(ncol(df_sr_wide))], measure.vars = 2:(ncol(df_sr_wide)))
+colnames(df_sr_long)[2] = "Date_year_month"
+colnames(df_sr_long)[3] = "num_presentations"
+
+### Add to df_sr_wide: # Presentations by user & Total Months by user
+df_sr_wide$total_presentations <- summ2$num_presentations
+df_sr_wide$total_months_used <- summ3$total_months_used
+
+### Student Engagement
+
+# Create bucket labels for num_students
+df_sr$num_students_label <- df_sr$num_students
+df_sr$num_students_label[which(df_sr$num_students == 1)] <- "0_Testing"
+df_sr$num_students_label[which(df_sr$num_students >= 2 & df_sr$num_students <= 5)] <- "1_Low"
+df_sr$num_students_label[which(df_sr$num_students >= 6 & df_sr$num_students <= 10)] <- "2_Low-Medium"
+df_sr$num_students_label[which(df_sr$num_students >= 11 & df_sr$num_students <= 30)] <- "3_Medium"
+df_sr$num_students_label[which(df_sr$num_students >= 31 & df_sr$num_students <= 40)] <- "4_Medium-High"
+df_sr$num_students_label[which(df_sr$num_students >= 41)] <- "5_High"
+
+# Rename the levels (note: did it this way to preserve the desired order)
+df_sr$num_students_label <- factor(df_sr$num_students_label)
+levels(df_sr$num_students_label) <- substr(levels(df_sr$num_students_label), 3, nchar(levels(df_sr$num_students_label)))
+
+# Create summary: Count in each student engagement bucket by user
+df_sr <- group_by(df_sr, teacher, num_students_label)
+summ  <- summarize(df_sr, num_students_label_ct = n()) 
+df_sr <- ungroup(df_sr)
+summ2 <- dcast(summ, teacher ~ num_students_label, value.var="num_students_label_ct")
+summ2[is.na(summ2)] <- 0 
+# Add to df_sr_wide
+df_sr_wide <- merge(df_sr_wide, summ2, all = FALSE)
+
+# Create summary: review first and last use dates
+df_sr <- group_by(df_sr, teacher)
+summ  <- summarize(df_sr, YM_first_use = min(Date_year_month_2), YM_last_use = max(Date_year_month_2)) 
+df_sr <- ungroup(df_sr)
+summ$months_bw_1st_last_use <- ((as.yearmon(strptime(summ$YM_last_use, format = "%Y-%m-%d")) - as.yearmon(strptime(summ$YM_first_use, format = "%Y-%m-%d")))*12)+1
+
+# Add to df_sr_wide
+df_sr_wide <- merge(df_sr_wide, summ, all = FALSE)
+
+# Add months_since_1st_use to df_sr_wide
+df_sr_wide$months_since_1st_use <- ((as.yearmon(strptime(upper_limit_date, format = "%Y-%m-%d")) - as.yearmon(strptime(df_sr_wide$YM_first_use, format = "%Y-%m-%d")))*12)+1
+
+# Add usage percentages to df_sr_wide
+df_sr_wide$use_perc_1 <- round(df_sr_wide$total_months_used/df_sr_wide$months_since_1st_use,2)
+df_sr_wide$use_perc_2 <- round(df_sr_wide$total_months_used/df_sr_wide$months_bw_1st_last_use,2)
+
+# Remove unnecessary dfs
+rm(list = c("summ","summ2","summ3"))
+```
+
+
+```{r}
+#####################
+# EXAMINE / REMOVE LOW # STUDENT ENGAGEMENTS
+# * OPTIONAL *
+#####################
+
+# Copy original into new df
+df_sr_original <- df_sr
+
+# Copy into new df
+df_sr_lowstu <- df_sr
+
+# Capture the unique number of teachers in the data set BEFORE excluding low student engagements
+num_teachers_orig <- length(levels(factor(df_sr_lowstu$teacher)))
+
+# Set theshold # (of student engagements to exclude - number is inclusive)
+low_num_exclude <- 1
+
+df_sr_lowstu <- df_sr_lowstu[-(which(df_sr_lowstu$num_students <= 1)), ]
+
+# Capture the unique number of teachers in the data set AFTER excluding low student engagements
+num_teachers_after <- length(levels(factor(df_sr_lowstu$teacher)))
+
+# Print message about the number of teachers removed from data set
+print(paste(num_teachers_orig - num_teachers_after, "teachers removed from data set because their only use of the product involved", low_num_exclude, "or fewer students."))
+
+# # Replace df_sr with version without low student engagements
+# df_sr <- df_sr_lowstu
+# 
+# # Replace df_sr with version with low student engagements
+# df_sr <- df_sr_original
+
+# Create summary of num_students_label
+df_sr <- group_by(df_sr, num_students_label)
+summ_num_stu <- summarize(df_sr, total = n())
+df_sr <- ungroup(df_sr)
+
+# 
+num_bins <- 1
+breaks <- num_bins*(0:(60/num_bins))
+
+p <- 
+  ggplot(data=summ_num_stu, aes(x=num_students_label, y=total)) + #, binwidth = num_bins
+  geom_bar(stat = "identity") +
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_discrete(name="Number of Students") +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Student Engagement Distribution") + 
+  theme(text = element_text(size = 14)) 
+print(p)
+ggsave(filename = "Student Engagement Distribution.png", plot = p, width = 15, height = 7, units = "in") 
 
 ```
 
@@ -311,10 +424,11 @@ df_sr <- ungroup(df_sr)
 # EXPLORE: Number of students for a presentation
 #####################
 
-breaks <- 5*(0:12)
+num_bins <- 1
+breaks <- num_bins*(0:(60/num_bins))
 
 p <- 
-  qplot(df_sr$num_students, geom="histogram", binwidth = 5) +
+  qplot(df_sr$num_students, geom="histogram", binwidth = num_bins) +
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
   scale_x_continuous(name="Number of Students", breaks = breaks) +
   coord_cartesian(xlim = c(0, 60)) +
@@ -323,7 +437,7 @@ p <-
   ggtitle("Students Per Presentation: Zoomed into bulk of distribution") + 
   theme(text = element_text(size = 14)) 
 
-ggsave(filename = "Students Per Presentation.png", plot = p, width = 10, height = 7, units = "in") 
+ggsave(filename = "Students Per Presentation.png", plot = p, width = 15, height = 7, units = "in") 
 
 p <- 
   qplot(df_sr$num_students, geom="histogram", binwidth = 1) +
