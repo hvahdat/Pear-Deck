@@ -54,7 +54,9 @@ upper_limit_date <- "2019-10-31"
 # DATA PULL: Student_responses
 #####################
 
-sql_string <- "SELECT CAST(teacher AS STRING) AS teacher, DATE(timestamp) AS Date, EXTRACT(HOUR FROM timestamp) AS hour, COUNT(DISTINCT presentation) AS num_presentations, COUNT(DISTINCT student) as num_students FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` WHERE lower(app) not like '%flash%' AND DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31' AND teacher NOT IN (SELECT externalid FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` WHERE DATE(firstseen) >= '2019-10-01') GROUP BY teacher, DATE(timestamp), EXTRACT(HOUR FROM timestamp)"
+sql_string <- "SELECT CAST(teacher AS STRING) AS teacher, DATE(timestamp) AS Date, EXTRACT(HOUR FROM timestamp) AS hour, COUNT(DISTINCT presentation) AS num_presentations, COUNT(DISTINCT student) as num_students FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` WHERE lower(app) not like '%flash%' AND DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31' AND teacher NOT IN ((SELECT externalid FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` WHERE DATE(firstseen) >= '2019-10-01')) GROUP BY teacher, DATE(timestamp), EXTRACT(HOUR FROM timestamp)"
+
+# Note: structured the query this way because slide_id can be null
 
 # Pull data
 # Approximate run time: 7.3 min
@@ -68,6 +70,24 @@ print(round(query_runtime,1))
 df_sr$Date_year_month <- format(df_sr$Date, format="%Y-%m")
 
 ```
+
+```{r}
+#####################
+# DATA PULL: slide_presented
+#####################
+
+sql_string <- "SELECT DISTINCT user_id, presentation_id, slide_type, DATE(timestamp) as Date, EXTRACT(HOUR FROM timestamp) as Hour, COUNT(DISTINCT slide_id) AS slide_type_ct FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented` WHERE DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31' AND user_id NOT IN ((SELECT externalid FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` WHERE DATE(firstseen) >= '2019-10-01')) GROUP BY user_id, presentation_id, slide_type, DATE(timestamp), EXTRACT(HOUR FROM timestamp)"
+
+# Pull data
+# Run time: 1 min
+query_start_time <- Sys.time()
+df_sp <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
+query_end_time <- Sys.time()
+query_runtime <- query_end_time - query_start_time
+print(round(query_runtime,1))
+
+```
+
 
 ```{r}
 #####################
@@ -132,16 +152,24 @@ df_sr$num_students_label[which(df_sr$num_students >= 41)] <- "5_High"
 
 # Rename the levels (note: did it this way to preserve the desired order)
 df_sr$num_students_label <- factor(df_sr$num_students_label)
-levels(df_sr$num_students_label) <- substr(levels(df_sr$num_students_label), 3, nchar(levels(df_sr$num_students_label)))
+levels(df_sr$num_students_label) <- paste("Num_stu_", substr(levels(df_sr$num_students_label), 3, nchar(levels(df_sr$num_students_label))), sep="")
 
 # Create summary: Count in each student engagement bucket by user
 df_sr <- group_by(df_sr, teacher, num_students_label)
 summ  <- summarize(df_sr, num_students_label_ct = n()) 
 df_sr <- ungroup(df_sr)
-summ2 <- dcast(summ, teacher ~ num_students_label, value.var="num_students_label_ct")
+# Merge in total_presentations
+summ <- merge(summ, df_sr_wide[,c(which(colnames(df_sr_wide)=="teacher"),which(colnames(df_sr_wide)=="total_presentations"))])
+# Calculate normalized num_students_label
+summ$num_stu_norm <- round(summ$num_students_label_ct/summ$total_presentations,2)
+# Make it wide (merge prep)
+summ2 <- dcast(summ, teacher ~ num_students_label, value.var="num_stu_norm")
 summ2[is.na(summ2)] <- 0 
 # Add to df_sr_wide
 df_sr_wide <- merge(df_sr_wide, summ2, all = FALSE)
+
+# Add Date_year_month_2 to df_sr
+df_sr$Date_year_month_2 <- as.Date(paste(df_sr$Date_year_month, "-01", sep=""))
 
 # Create summary: review first and last use dates
 df_sr <- group_by(df_sr, teacher)
@@ -155,9 +183,14 @@ df_sr_wide <- merge(df_sr_wide, summ, all = FALSE)
 # Add months_since_1st_use to df_sr_wide
 df_sr_wide$months_since_1st_use <- ((as.yearmon(strptime(upper_limit_date, format = "%Y-%m-%d")) - as.yearmon(strptime(df_sr_wide$YM_first_use, format = "%Y-%m-%d")))*12)+1
 
-# Add usage percentages to df_sr_wide
-df_sr_wide$use_perc_1 <- round(df_sr_wide$total_months_used/df_sr_wide$months_since_1st_use,2)
-df_sr_wide$use_perc_2 <- round(df_sr_wide$total_months_used/df_sr_wide$months_bw_1st_last_use,2)
+# Add normalized time usage to df_sr_wide
+df_sr_wide$time_usage_perc <- round(df_sr_wide$total_months_used/df_sr_wide$months_since_1st_use,2)
+#df_sr_wide$time_usage_perc2 <- round(df_sr_wide$total_months_used/df_sr_wide$months_bw_1st_last_use,2)
+
+# Add normalized presentation usage to df_sr_wide
+df_sr_wide$pres_usage_norm1 <- round(df_sr_wide$total_presentations/df_sr_wide$total_months_used,2)
+df_sr_wide$pres_usage_norm2 <- round(df_sr_wide$total_presentations/df_sr_wide$months_bw_1st_last_use,2)
+df_sr_wide$pres_usage_norm3 <- round(df_sr_wide$total_presentations/df_sr_wide$months_since_1st_use,2)
 
 # Remove unnecessary dfs
 rm(list = c("summ","summ2","summ3"))
@@ -196,6 +229,10 @@ print(paste(num_teachers_orig - num_teachers_after, "teachers removed from data 
 # # Replace df_sr with version with low student engagements
 # df_sr <- df_sr_original
 
+
+# Rename the levels (for a pretty plot)
+levels(df_sr$num_students_label) <- substr(levels(df_sr$num_students_label), 9, nchar(levels(df_sr$num_students_label)))
+
 # Create summary of num_students_label
 df_sr <- group_by(df_sr, num_students_label)
 summ_num_stu <- summarize(df_sr, total = n())
@@ -216,6 +253,9 @@ p <-
   theme(text = element_text(size = 14)) 
 print(p)
 ggsave(filename = "Student Engagement Distribution.png", plot = p, width = 15, height = 7, units = "in") 
+
+# Rename the levels back to what they were
+levels(df_sr$num_students_label) <- paste("Num_stu_", levels(df_sr$num_students_label), sep="")
 
 ```
 
@@ -325,7 +365,6 @@ ggsave(filename = "chart_bymonth_sd_bar(vIn0).png", plot = p, width = 20, height
 #####################
 
 # Create usage summary by Year/Month
-df_sr$Date_year_month_2 <- as.Date(paste(df_sr$Date_year_month, "-01", sep=""))
 
 df_sr <- group_by(df_sr, Date_year_month_2, teacher)
 summ_vEx0_yearmonth_teacher <- summarize(df_sr, total_pres = sum(num_presentations))
