@@ -76,15 +76,17 @@ df_sr$Date_year_month <- format(df_sr$Date, format="%Y-%m")
 # DATA PULL: slide_presented
 #####################
 
-sql_string <- "SELECT DISTINCT user_id, presentation_id, slide_type, DATE(timestamp) as Date, EXTRACT(HOUR FROM timestamp) as Hour, COUNT(DISTINCT slide_id) AS slide_type_ct FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented` WHERE DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31' AND user_id NOT IN ((SELECT externalid FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` WHERE DATE(firstseen) >= '2019-10-01')) GROUP BY user_id, presentation_id, slide_type, DATE(timestamp), EXTRACT(HOUR FROM timestamp)"
+sql_string <- "SELECT user_id, slide_type, SUM(slide_type_ct) AS slide_type_ct FROM (SELECT CAST(user_id AS STRING) AS user_id, presentation_id, slide_id, slide_type, DATE(timestamp) as Date, EXTRACT(HOUR FROM timestamp) as Hour, COUNT(DISTINCT user_id) AS slide_type_ct FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented` WHERE DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31' AND user_id NOT IN ((SELECT externalid FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` WHERE DATE(firstseen) >= '2019-10-01')) GROUP BY user_id, presentation_id, slide_id, slide_type, DATE(timestamp), EXTRACT(HOUR FROM timestamp)) GROUP BY user_id, slide_type"
 
 # Pull data
-# Run time: 1 min
+# Run time: 3 min
 query_start_time <- Sys.time()
 df_sp <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
 query_end_time <- Sys.time()
 query_runtime <- query_end_time - query_start_time
 print(round(query_runtime,1))
+
+names(df_sp)[names(df_sp) == "user_id"] <- "teacher"
 
 ```
 
@@ -196,6 +198,26 @@ df_sr_wide$pres_usage_norm3 <- round(df_sr_wide$total_presentations/df_sr_wide$m
 rm(list = c("summ","summ2","summ3"))
 ```
 
+```{r}
+#####################
+# CREATE DFs: df_sp_wide
+#####################
+
+# Create summary: total slides per teacher
+df_sp <- group_by(df_sp, teacher)
+summ <- summarize(df_sp, total_slides = sum(slide_type_ct))
+df_sp <-ungroup(df_sp)
+
+# Merge total_slides into df_sp
+df_sp <- merge(summ, df_sp)
+  
+# Calculate normalized slide_type
+df_sp$slide_type_amt_norm <- round(df_sp$slide_type_ct/df_sp$total_slides, 2)
+
+# Create df_sp_wide
+df_sp_wide <- dcast(df_sp, teacher + total_slides ~  slide_type, value.var = "slide_type_amt_norm")
+
+```
 
 ```{r}
 #####################
