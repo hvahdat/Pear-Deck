@@ -51,10 +51,109 @@ upper_limit_date <- "2019-10-31"
 
 ```{r}
 #####################
-# DATA PULL: Student_responses
+# DATA PULL: User Statuses
 #####################
 
-sql_string <- "SELECT CAST(teacher AS STRING) AS teacher, DATE(timestamp) AS Date, EXTRACT(HOUR FROM timestamp) AS hour, COUNT(DISTINCT presentation) AS num_presentations, COUNT(DISTINCT student) as num_students FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` WHERE lower(app) not like '%flash%' AND DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31' AND teacher NOT IN ((SELECT externalid FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` WHERE DATE(firstseen) >= '2019-10-01')) GROUP BY teacher, DATE(timestamp), EXTRACT(HOUR FROM timestamp)"
+# 10 seconds
+sql_string <- "SELECT CAST(externalid as STRING), first_pres_after_trial, last_pres_1st_few_mnths, timestamp, 
+CASE WHEN first_pres_after_trial = timestamp THEN b.account_status END AS account_status_min,
+CASE WHEN last_pres_1st_few_mnths = timestamp THEN b.account_status END AS account_status_max
+
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.gslides_addon_launch_presentation` b
+RIGHT JOIN
+
+(
+SELECT externalid, MIN(timestamp) as first_pres_after_trial, MAX(timestamp) as last_pres_1st_few_mnths
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.gslides_addon_launch_presentation` lp_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf ON lp_i.user_id = uf.externalid
+WHERE ((DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 MONTH) AND DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH)) OR timestamp IS NULL) 
+AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+GROUP BY externalid
+) a
+
+ON b.user_id = a.externalid AND (b.timestamp = a.first_pres_after_trial OR b.timestamp = a.last_pres_1st_few_mnths)
+--Note: count does not exactly equal what's in user facts if user hasn't launched a presentation ever."
+
+query_start_time <- Sys.time()
+df_us <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf) #, allowLargeResults = TRUE
+query_end_time <- Sys.time()
+query_runtime <- query_end_time - query_start_time
+print(round(query_runtime,1))
+
+```
+
+```{r}
+#####################
+# DATA PULL: slide_presented & student_responses
+#####################
+
+# NEWEST VERSION
+sql_string <- "SELECT 
+CAST(sp.externalid AS STRING) AS teacher,
+DATE(sp.timestamp) AS Date,
+EXTRACT(HOUR FROM sp.timestamp) AS hour,
+COUNT(DISTINCT sp.presentation_id) as num_presentations,
+COUNT(DISTINCT sr.student) as num_students
+
+FROM 
+
+(SELECT externalid, presentation_id, slide_id, timestamp, DATE(timestamp) as date, EXTRACT(HOUR FROM timestamp) as hour
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented` sp_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf_i 
+ON sp_i.user_id = uf_i.externalid
+WHERE 
+((DATE(timestamp) BETWEEN DATE(FirstSeen) AND DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH)) 
+OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
+OR timestamp IS NULL))
+AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18') 
+) sp 
+
+LEFT JOIN 
+
+(SELECT externalid, teacher, student, presentation, timestamp, slide, DATE(timestamp) as date, EXTRACT(HOUR FROM timestamp) as hour
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` sr_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf_i 
+ON sr_i.teacher = uf_i.externalid
+WHERE app not like '%flash%' 
+AND ((DATE(timestamp) BETWEEN DATE(FirstSeen) AND DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH)) 
+OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
+OR timestamp IS NULL))
+AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+) sr 
+
+ON sp.externalid = sr.externalid AND sp.slide_id = sr.slide AND sp.presentation_id = sr.presentation AND sp.date = sr.date AND sp.hour = sr.hour
+
+GROUP BY sp.externalid, DATE(sp.timestamp), EXTRACT(HOUR FROM sp.timestamp)
+--Note: count does not exactly equal what's in user facts if user hasn't launched a presentation ever.
+"
+
+# NOTE: version below joins student_responses & slide_presented (which includes slides not presented to an audience)
+# sql_string <- "SELECT 
+# CAST(user_id AS STRING) AS teacher,
+# DATE(sp.timestamp) AS Date,
+# EXTRACT(HOUR FROM sp.timestamp) AS hour,
+# COUNT(DISTINCT sp.presentation_id) as num_presentations,
+# COUNT(DISTINCT sr.student) as num_students
+# 
+# FROM 
+# 
+# (SELECT *, DATE(timestamp) as date, EXTRACT(HOUR FROM timestamp) as hour
+# FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented`
+# WHERE DATE(timestamp) >= '2018-01-01' AND DATE(timestamp) <= '2019-10-31' AND user_id NOT IN (
+# (SELECT externalid FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` WHERE DATE(firstseen) >= '2019-10-01')
+# )) sp 
+# 
+# LEFT JOIN 
+# 
+# (SELECT *, DATE(timestamp) as date, EXTRACT(HOUR FROM timestamp) as hour
+# FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses`
+# WHERE app not like '%flash%' AND DATE(timestamp) >= '2018-01-01' AND DATE(timestamp) <= '2019-10-31' AND teacher NOT IN (
+# (SELECT externalid FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` WHERE DATE(firstseen) >= '2019-10-01')
+# )) sr 
+# 
+# ON sp.slide_id = sr.slide AND sp.presentation_id = sr.presentation AND sp.date = sr.date AND sp.hour = sr.hour
+# 
+# GROUP BY user_id, DATE(sp.timestamp), EXTRACT(HOUR FROM sp.timestamp)"
+
+# NOTE: version below is student_responses table only.
+#sql_string <- "SELECT CAST(teacher AS STRING) AS teacher, DATE(timestamp) AS Date, EXTRACT(HOUR FROM timestamp) AS hour, COUNT(DISTINCT presentation) AS num_presentations, COUNT(DISTINCT student) as num_students FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` WHERE lower(app) not like '%flash%' AND DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31' AND teacher NOT IN ((SELECT externalid FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` WHERE DATE(firstseen) >= '2019-10-01')) GROUP BY teacher, DATE(timestamp), EXTRACT(HOUR FROM timestamp)"
 
 # Note: structured the query this way because slide_id can be null
 
@@ -76,17 +175,19 @@ df_sr$Date_year_month <- format(df_sr$Date, format="%Y-%m")
 # DATA PULL: slide_presented
 #####################
 
-sql_string <- "SELECT user_id, slide_type, SUM(slide_type_ct) AS slide_type_ct FROM (SELECT CAST(user_id AS STRING) AS user_id, presentation_id, slide_id, slide_type, DATE(timestamp) as Date, EXTRACT(HOUR FROM timestamp) as Hour, COUNT(DISTINCT user_id) AS slide_type_ct FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented` WHERE DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31' AND user_id NOT IN ((SELECT externalid FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` WHERE DATE(firstseen) >= '2019-10-01')) GROUP BY user_id, presentation_id, slide_id, slide_type, DATE(timestamp), EXTRACT(HOUR FROM timestamp)) GROUP BY user_id, slide_type"
+# NEVERMIND DON'T USE
 
-# Pull data
-# Run time: 3 min
-query_start_time <- Sys.time()
-df_sp <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
-query_end_time <- Sys.time()
-query_runtime <- query_end_time - query_start_time
-print(round(query_runtime,1))
-
-names(df_sp)[names(df_sp) == "user_id"] <- "teacher"
+# sql_string <- "SELECT user_id, slide_type, SUM(slide_type_ct) AS slide_type_ct FROM (SELECT CAST(user_id AS STRING) AS user_id, presentation_id, slide_id, slide_type, DATE(timestamp) as Date, EXTRACT(HOUR FROM timestamp) as Hour, COUNT(DISTINCT user_id) AS slide_type_ct FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented` WHERE DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31' AND user_id NOT IN ((SELECT externalid FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` WHERE DATE(firstseen) >= '2019-10-01')) GROUP BY user_id, presentation_id, slide_id, slide_type, DATE(timestamp), EXTRACT(HOUR FROM timestamp)) GROUP BY user_id, slide_type"
+# 
+# # Pull data
+# # Run time: 3 min
+# query_start_time <- Sys.time()
+# df_sp <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
+# query_end_time <- Sys.time()
+# query_runtime <- query_end_time - query_start_time
+# print(round(query_runtime,1))
+# 
+# names(df_sp)[names(df_sp) == "user_id"] <- "teacher"
 
 ```
 
@@ -96,7 +197,12 @@ names(df_sp)[names(df_sp) == "user_id"] <- "teacher"
 # DATA PULL: user_facts_anonymized
 #####################
 
-sql_string <- "SELECT DISTINCT CAST(externalid AS STRING) AS externalid, profile_role, firstseen, CAST(domain AS STRING) as domain, firstpremiumtime, premiumstatusatsignup, accountType, expirationdate, trial_end, coupon_medium FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` ON `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized`.externalid = `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses`.teacher WHERE DATE(firstseen) < '2019-10-01' AND lower(app) not like '%flash%' AND DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31'"
+# NEW VERSION
+sql_string <- "SELECT CAST(externalid AS STRING) as teacher, firstseen
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` 
+WHERE (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')"
+  
+# sql_string <- "SELECT DISTINCT CAST(externalid AS STRING) AS externalid, profile_role, firstseen, CAST(domain AS STRING) as domain, firstpremiumtime, premiumstatusatsignup, accountType, expirationdate, trial_end, coupon_medium FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` ON `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized`.externalid = `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses`.teacher WHERE DATE(firstseen) < '2019-10-01' AND lower(app) not like '%flash%' AND DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31'"
 
 # Pull data
 # Run time: 1 min
