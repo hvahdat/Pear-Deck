@@ -42,6 +42,111 @@ upper_limit_date <- "2019-10-31"
 # install.packages("DescTools")
 
 
+#####################
+# DATA PULL: Teachers who participated in a presentation before ever presenting
+#####################
+
+# Theory is that they have better retention.
+
+sql_string <- "WITH
+Teachers1 AS (
+SELECT distinct teacher, min (timestamp) firstTimeTeacher
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responded`
+GROUP BY teacher
+),
+
+Teachers2 AS (
+SELECT distinct externalId
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized`
+WHERE profile_role != 'student'
+),
+
+Teachers AS (
+SELECT distinct teacher, firstTimeTeacher
+FROM Teachers1 JOIN Teachers2 ON teacher = externalId
+),
+
+Students AS (
+SELECT distinct student, min (timestamp) firstTimeStudent
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responded`
+GROUP BY student
+),
+
+StudentTeachers AS (
+SELECT teacher, firstTimeTeacher, firstTimeStudent
+FROM Teachers JOIN Students ON teacher = student
+)
+
+SELECT CAST(teacher as STRING) as teacher, firstTimeStudent, firstTimeTeacher
+FROM StudentTeachers
+WHERE firstTimeStudent < firstTimeTeacher"
+
+# Savae into dataframe
+df_ppb4 <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
+
+# Add column: 
+df_ppb4$participated_b4_used <- as.numeric(1)
+
+# Reduce to only unique columns of interest
+df_ppb4 <- df_ppb4[,c(1,4)]
+
+#####################
+# DATA PULL: Teachers who presented 5+ presentations in a year
+#####################
+
+sql_string <- "SELECT teacher, 
+CASE 
+WHEN SUM(num_presentations) >= 5 THEN 1
+ELSE 0
+END as prez_5_plus
+FROM
+(
+  SELECT 
+  CAST(sp.externalid AS STRING) AS teacher,
+  presentation_id,
+  DATE(sp.timestamp) AS Date,
+  EXTRACT(HOUR FROM sp.timestamp) AS hour,
+  COUNT(DISTINCT sp.presentation_id) as num_presentations,
+  COUNT(DISTINCT sr.student) as num_students
+  
+  FROM 
+  
+  (SELECT externalid, presentation_id, slide_id, timestamp, DATE(timestamp) as date, EXTRACT(HOUR FROM timestamp) as hour
+  FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented` sp_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf_i 
+  ON sp_i.user_id = uf_i.externalid
+  WHERE 
+  ((DATE(timestamp) BETWEEN DATE(FirstSeen) AND DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR)) 
+  --OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
+  --OR timestamp IS NULL)
+  )
+  AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18') 
+  AND profile_role <> 'student'
+  ) sp 
+  
+  LEFT JOIN 
+  
+  (SELECT externalid, teacher, student, presentation, timestamp, slide, DATE(timestamp) as date, EXTRACT(HOUR FROM timestamp) as hour
+  FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` sr_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf_i 
+  ON sr_i.teacher = uf_i.externalid
+  WHERE app not like '%flash%' 
+  AND ((DATE(timestamp) BETWEEN DATE(FirstSeen) AND DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR)) 
+  --OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
+  --OR timestamp IS NULL)
+  )
+  AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+  AND profile_role <> 'student'
+  ) sr 
+  
+  ON sp.externalid = sr.externalid AND sp.slide_id = sr.slide AND sp.presentation_id = sr.presentation AND sp.date = sr.date AND sp.hour = sr.hour
+  
+  GROUP BY sp.externalid, presentation_id, DATE(sp.timestamp), EXTRACT(HOUR FROM sp.timestamp)
+  --Note: count does not exactly equal what's in user facts if user hasn't launched a presentation ever.
+) z
+  GROUP BY teacher"
+  
+df_5_plus <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
+
+
 ##############################################################################
 # Looping starts here
 ##############################################################################
@@ -185,6 +290,7 @@ for (k in 1:2) {
     # NEWEST VERSION
     sql_string <- "SELECT 
     CAST(sp.externalid AS STRING) AS teacher,
+    presentation_id,
     DATE(sp.timestamp) AS Date,
     EXTRACT(HOUR FROM sp.timestamp) AS hour,
     COUNT(DISTINCT sp.presentation_id) as num_presentations,
@@ -220,7 +326,7 @@ for (k in 1:2) {
     
     ON sp.externalid = sr.externalid AND sp.slide_id = sr.slide AND sp.presentation_id = sr.presentation AND sp.date = sr.date AND sp.hour = sr.hour
     
-    GROUP BY sp.externalid, DATE(sp.timestamp), EXTRACT(HOUR FROM sp.timestamp)
+    GROUP BY sp.externalid, presentation_id, DATE(sp.timestamp), EXTRACT(HOUR FROM sp.timestamp)
     --Note: count does not exactly equal what's in user facts if user hasn't launched a presentation ever.
     "
     
@@ -559,9 +665,64 @@ df_sr_wide <- merge(x = df_sr_wide, y = df_as, by = "teacher", all.x = TRUE)
                                       which(colnames(df_sr_wide_INITIAL)=="account_status_max"))]
     names(df_wide)[names(df_wide) == "status_label"] <- "status_label_initial_months"
     
-    df_wide$total_students[which(is.na(df_wide$total_students))] <- 0
-    
   }
 
 
 }
+
+# total_students: turn NAs to zeros
+df_wide$total_students[which(is.na(df_wide$total_students))] <- 0
+#df_wide$slideDiversity[which(is.na(df_wide$slideDiversity))] <- 0 # Might not want to do this -- 0 means low slide diversity, but NA is actually the absence of values. 
+
+# Create new columns: num_prez_audience & num_prez_testing
+df_wide$num_prez_audience <- df_wide$total_presentations-(df_wide$total_presentations*df_wide$Num_stu_Testing)
+df_wide$num_prez_testing <- df_wide$total_presentations*df_wide$Num_stu_Testing
+
+# Visualize number of presentations for an audience
+p <- qplot(df_wide$num_prez_audience, geom="histogram", binwidth = 5) +
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_continuous(name="Number of Presentations Given to an Audience") +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Presentations Given to Audience") + 
+  theme(text = element_text(size = 14)) 
+
+ggsave(filename = "Presentations Given to Audience.png", plot = p, width = 15, height = 7, units = "in")
+
+# Visualize number of presentations for an audience (zoomed in)
+p <- qplot(df_wide$num_prez_audience, geom="histogram", binwidth = 5) +
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_continuous(name="Number of Presentations Given to an Audience") +
+  coord_cartesian(xlim = c(0, 30)) +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Presentations Given to Audience (Zoomed In)") + 
+  theme(text = element_text(size = 14)) 
+
+ggsave(filename = "Presentations Given to Audience (Zoomed In).png", plot = p, width = 15, height = 7, units = "in")
+
+# Turn blanks from num_prez_audience & num_prez_testing to zeros
+df_wide$num_prez_audience[which(is.na(df_wide$num_prez_audience))] <- 0
+df_wide$num_prez_testing[which(is.na(df_wide$num_prez_testing))] <- 0
+
+### Create column: total_prez_label
+# Initialize column
+df_wide$total_prez_label <- as.character(NA)
+# Add labels
+df_wide$total_prez_label[which(df_wide$total_presentations <= 4)] <- "1_Light"
+df_wide$total_prez_label[which(df_wide$total_presentations >=5 & df_wide$total_presentations <= 9)] <- "2_Medium"
+df_wide$total_prez_label[which(df_wide$total_presentations >=10 & df_wide$total_presentations <= 19)] <- "3_Heavy"
+df_wide$total_prez_label[which(df_wide$total_presentations >= 20)] <- "4_Superuser"
+# Rename the levels (note: did it this way to preserve the desired order)
+df_wide$total_prez_label <- factor(df_wide$total_prez_label)
+levels(df_wide$total_prez_label) <- substr(levels(df_wide$total_prez_label), 3, nchar(levels(df_wide$total_prez_label)))
+
+# Merge in participated in presentation before presented
+df_wide <- merge(x = df_wide, y = df_ppb4, by = "teacher", all.x = TRUE)
+# participated_b4_used: turn NAs to zeros
+df_wide$participated_b4_used[which(is.na(df_wide$participated_b4_used))] <- 0
+
+# Merge in prez_5_plus
+df_wide <- merge(x = df_wide, y = df_5_plus, by = "teacher", all.x = TRUE)
+# participated_b4_used: turn NAs to zeros
+df_wide$prez_5_plus[which(is.na(df_wide$prez_5_plus))] <- 0
