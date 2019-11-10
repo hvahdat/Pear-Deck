@@ -93,7 +93,7 @@ df_sr_wide$total_students <- summ5$total_students
 df_sr_wide$total_months_used <- summ3$total_months_used
 
 df_sr_wide$total_presentations[is.na(df_sr_wide$total_presentations)]<- 0
-#df_sr_wide$num_students[is.na(df_sr_wide$num_students)] <- 0 
+df_sr$num_students[is.na(df_sr$num_students)] <- 0 
 
 
 
@@ -216,7 +216,7 @@ df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$t
 df_sp_wide$slideDiversity <- as.numeric(0)
 
 for (i in 1:nrow(df_sp_wide)) {
-
+  
   sum = 0
   
   for (j in 1:(ncol(df_sp_wide)-3)) {
@@ -226,7 +226,7 @@ for (i in 1:nrow(df_sp_wide)) {
     }
     
   }
-
+  
   sum = sum * -1
   
   df_sp_wide$slideDiversity[i] <- round(sum, 3)
