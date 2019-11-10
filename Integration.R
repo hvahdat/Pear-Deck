@@ -16,9 +16,9 @@ df_us$timestamp <- NULL
 #do this to merge teachers into one row
 library(data.table)
 df_us <- dcast(setDT(df_us), teacher ~ rowid(teacher), value.var = c("first_pres_after_trial",
-                                                                       "last_pres_1st_few_mnths",
-                                                                       "account_status_min",
-                                                                       "account_status_max"))
+                                                                     "last_pres_1st_few_mnths",
+                                                                     "account_status_min",
+                                                                     "account_status_max"))
 
 #Here we need to merge 2 columns into one, since min and max often fill in either column 1 or 2
 df_us$account_status_min_1[is.na(df_us$account_status_min_1)] <- ""
@@ -51,7 +51,7 @@ dfus_into_dfuf <- merge(x = df_uf, y = df_us, by = "teacher", all.x = TRUE)
 
 entire_dfuf <- merge(x = dfus_into_dfuf, y = df_sr, by = "teacher", all.x = TRUE)
 
-
+##### ADD SOMETHING TO CHANGE BLANKS BACK TO NAs - KATIE
 
 # Create summary: presentations by year/month
 
@@ -61,23 +61,22 @@ summ  <- summarize(entire_dfuf, num_presentations = sum(num_presentations))
 entire_dfuf <- ungroup(entire_dfuf)
 
 
-
 # Create wide df
 #121,938 unique teachers in wide
 df_sr_wide <- dcast(summ, teacher ~ Date_year_month, value.var="num_presentations")
+# Remove the NA column (happens b/c some have NAs for all dates) ############### KATIE!! change
+df_sr_wide <- df_sr_wide[,1:ncol(df_sr_wide)-1]
+
+# Create new col summing num_students: total_students
+entire_dfuf <- group_by(entire_dfuf, teacher)
+summ5  <- summarize(entire_dfuf, total_students = sum(num_students)) 
+entire_dfuf <- ungroup(entire_dfuf)
 
 # Create new col in df_sr_wide: total_presentations & total_months_used
 summ <- group_by(summ, teacher)
-summ2 <- summarize(summ, num_presentations = sum(num_presentations)) 
-summ3 <- summarize(summ, total_months_used = n()) 
+summ2 <- summarize(summ, num_presentations = sum(num_presentations))
+summ3 <- summarize(summ, total_months_used = sum(!is.na(Date_year_month)) ) ####KATIE CHANGED FROM n()
 summ <- ungroup(summ)
-
-
-
-
-
-
-
 
 
 #Now we want all users from df_uf, so first I will merge df_uf & df_sr_wide, with df_uf on left
@@ -89,6 +88,7 @@ df_sr_wide <- merge(x= df_uf, y=df_sr_wide, by = "teacher", all.x = TRUE)
 
 ### Add to df_sr_wide: # Presentations by user & Total Months by user
 df_sr_wide$total_presentations <- summ2$num_presentations
+df_sr_wide$total_students <- summ5$total_students
 df_sr_wide$total_months_used <- summ3$total_months_used
 
 df_sr_wide$total_presentations[is.na(df_sr_wide$total_presentations)]<- 0
@@ -102,7 +102,7 @@ df_sr_wide$total_presentations[is.na(df_sr_wide$total_presentations)]<- 0
 
 # Create bucket labels for num_students
 df_sr$num_students_label <- df_sr$num_students
-df_sr$num_students_label[which(df_sr$num_students == 1)] <- "0_Testing"
+df_sr$num_students_label[which(df_sr$num_students <= 1)] <- "0_Testing"
 df_sr$num_students_label[which(df_sr$num_students >= 2 & df_sr$num_students <= 5)] <- "1_Low"
 df_sr$num_students_label[which(df_sr$num_students >= 6 & df_sr$num_students <= 10)] <- "2_Low-Medium"
 df_sr$num_students_label[which(df_sr$num_students >= 11 & df_sr$num_students <= 30)] <- "3_Medium"
@@ -166,23 +166,44 @@ rm(list = c("summ","summ2","summ3"))
 
 #unless if you want the code below, which is NOT unique at row level
 
-entire_dfuf2 <- merge(x = entire_dfuf, y = df_sr_wide, by = c("teacher","firstseen"), all.x = TRUE)
+#entire_dfuf2 <- merge(x = entire_dfuf, y = df_sr_wide, by = c("teacher","firstseen"), all.x = TRUE) #### KATIE COMMENTED OUT
 
 
+# Turn blanks into NAs
+entire_dfuf$account_status_min <- na_if(entire_dfuf$account_status_min,"")
+entire_dfuf$account_status_max <- na_if(entire_dfuf$account_status_max,"")
 
+# Pull over two columns
+df_statuses <- entire_dfuf[ , c(which(colnames(entire_dfuf)=="teacher"), which(colnames(entire_dfuf)=="account_status_min"), which(colnames(entire_dfuf)=="account_status_max"))]
 
+# Remove duplicates
+df_statuses <- unique(df_statuses)
 
+# Exploring account status
+# Examine the unique combinations (delete later)
+df_statuses <- group_by(df_statuses, account_status_min, account_status_max)
+summ_status <- summarize(df_statuses, total = n())
+df_statuses <- ungroup(df_statuses)
 
+# Merge df_statuses into df_sr_wide
+df_sr_wide <- merge(x = df_sr_wide, y = df_statuses, by = "teacher", all.x = TRUE)
 
+# entire_dfuf <- group_by(entire_dfuf, teacher)
+# summ5 <- summarize(entire_dfuf, )
+# entire_dfuf <- ungroup(entire_dfuf)
 
+# Create empty column
+df_sr_wide$status_label <- as.character("")
 
-
-
-
-
-
-
-
-
-
-
+# Never used
+df_sr_wide$status_label[which( df_sr_wide$total_presentations == 0)] <- "Never Used"
+# Tested Project Only
+df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students <= 1)] <- "Tested Project Only"
+# Presented to 2+ went free
+df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & df_sr_wide$account_status_max == "free")] <- "Used Product Free"
+# Presented to 2+ went premium
+df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & df_sr_wide$account_status_max == "premium")] <- "Used Product Premium"
+# Presented to 2+ went premiumtrial
+df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & df_sr_wide$account_status_max == "premiumTrial")] <- "Used Product PremiumTrial"
+# Presented to 2+ but status unknown (i.e. they used the product in the 1st month but not the subsequent months in the time span)
+df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & is.na(df_sr_wide$account_status_max) == TRUE)] <- "Used Product Unknown Status"
