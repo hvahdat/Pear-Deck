@@ -90,6 +90,7 @@ print(round(query_runtime,1))
 # NEWEST VERSION
 sql_string <- "SELECT 
 CAST(sp.externalid AS STRING) AS teacher,
+presentation_id,
 DATE(sp.timestamp) AS Date,
 EXTRACT(HOUR FROM sp.timestamp) AS hour,
 COUNT(DISTINCT sp.presentation_id) as num_presentations,
@@ -125,7 +126,7 @@ AND profile_role <> 'student'
 
 ON sp.externalid = sr.externalid AND sp.slide_id = sr.slide AND sp.presentation_id = sr.presentation AND sp.date = sr.date AND sp.hour = sr.hour
 
-GROUP BY sp.externalid, DATE(sp.timestamp), EXTRACT(HOUR FROM sp.timestamp)
+GROUP BY sp.externalid, presentation_id, DATE(sp.timestamp), EXTRACT(HOUR FROM sp.timestamp)
 --Note: count does not exactly equal what's in user facts if user hasn't launched a presentation ever.
 "
 
@@ -173,6 +174,9 @@ print(round(query_runtime,1))
 # Add field of date in YYYY-MM format
 df_sr$Date_year_month <- format(df_sr$Date, format="%Y-%m")
 
+# Remove column "presentation_id" (need it for cases when two presentations are presented within the same hour)
+df_sr <- df_sr[,-which(colnames(df_sr)=="presentation_id")]
+
 ```
 
 ```{r}
@@ -180,19 +184,28 @@ df_sr$Date_year_month <- format(df_sr$Date, format="%Y-%m")
 # DATA PULL: slide_presented
 #####################
 
-# NEVERMIND DON'T USE
+sql_string <- "SELECT user_id, slide_type, SUM(slide_type_ct) AS slide_type_ct 
+FROM (
 
-# sql_string <- "SELECT user_id, slide_type, SUM(slide_type_ct) AS slide_type_ct FROM (SELECT CAST(user_id AS STRING) AS user_id, presentation_id, slide_id, slide_type, DATE(timestamp) as Date, EXTRACT(HOUR FROM timestamp) as Hour, COUNT(DISTINCT user_id) AS slide_type_ct FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented` WHERE DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31' AND user_id NOT IN ((SELECT externalid FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` WHERE DATE(firstseen) >= '2019-10-01')) GROUP BY user_id, presentation_id, slide_id, slide_type, DATE(timestamp), EXTRACT(HOUR FROM timestamp)) GROUP BY user_id, slide_type"
-# 
-# # Pull data
-# # Run time: 3 min
-# query_start_time <- Sys.time()
-# df_sp <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
-# query_end_time <- Sys.time()
-# query_runtime <- query_end_time - query_start_time
-# print(round(query_runtime,1))
-# 
-# names(df_sp)[names(df_sp) == "user_id"] <- "teacher"
+SELECT CAST(user_id AS STRING) AS user_id, presentation_id, slide_id, slide_type, DATE(timestamp) as Date, EXTRACT(HOUR FROM timestamp) as Hour, COUNT(DISTINCT user_id) AS slide_type_ct 
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented` sp JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf ON sp.user_id = uf.externalid
+WHERE ((DATE(timestamp) BETWEEN DATE(FirstSeen) AND DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH))
+AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18') AND profile_role <> 'student')
+GROUP BY user_id, presentation_id, slide_id, slide_type, DATE(timestamp), EXTRACT(HOUR FROM timestamp)
+) 
+
+GROUP BY user_id, slide_type
+"
+
+# Pull data
+# Run time: 3 min
+query_start_time <- Sys.time()
+df_sp <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
+query_end_time <- Sys.time()
+query_runtime <- query_end_time - query_start_time
+print(round(query_runtime,1))
+
+names(df_sp)[names(df_sp) == "user_id"] <- "teacher"
 
 ```
 
@@ -217,6 +230,28 @@ df_uf <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, ma
 query_end_time <- Sys.time()
 query_runtime <- query_end_time - query_start_time
 print(round(query_runtime,1))
+
+```
+
+
+```{r}
+#####################
+# CREATE DFs: df_sp_wide
+#####################
+
+# Create summary: total slides per teacher
+df_sp <- group_by(df_sp, teacher)
+summ <- summarize(df_sp, total_slides = sum(slide_type_ct))
+df_sp <- ungroup(df_sp)
+
+# Merge total_slides into df_sp
+df_sp <- merge(summ, df_sp, by = "teacher")
+  
+# Calculate normalized slide_type
+df_sp$slide_type_amt_norm <- df_sp$slide_type_ct/df_sp$total_slides
+
+# Create df_sp_wide
+df_sp_wide <- dcast(df_sp, teacher + total_slides ~  slide_type, value.var = "slide_type_amt_norm")
 
 ```
 
@@ -310,26 +345,6 @@ df_sr_wide$pres_usage_norm3 <- round(df_sr_wide$total_presentations/df_sr_wide$m
 rm(list = c("summ","summ2","summ3"))
 ```
 
-```{r}
-#####################
-# CREATE DFs: df_sp_wide
-#####################
-
-# Create summary: total slides per teacher
-df_sp <- group_by(df_sp, teacher)
-summ <- summarize(df_sp, total_slides = sum(slide_type_ct))
-df_sp <-ungroup(df_sp)
-
-# Merge total_slides into df_sp
-df_sp <- merge(summ, df_sp)
-  
-# Calculate normalized slide_type
-df_sp$slide_type_amt_norm <- round(df_sp$slide_type_ct/df_sp$total_slides, 2)
-
-# Create df_sp_wide
-df_sp_wide <- dcast(df_sp, teacher + total_slides ~  slide_type, value.var = "slide_type_amt_norm")
-
-```
 
 ```{r}
 #####################
@@ -631,4 +646,98 @@ ggsave(filename = "Students Per Presentation (zoomed in small).png", plot = p)
 code_end_time <- Sys.time()
 code_runtime <- code_end_time - code_start_time
 print(round(code_runtime,1))
+```
+
+
+```{r}
+#####################
+# DATA PULL: User Statuses NEXT YEAR
+#####################
+
+# 10 seconds
+sql_string <- "SELECT CAST(externalid as STRING) as teacher, first_pres_after_trial, last_pres_1st_few_mnths, timestamp, 
+CASE WHEN first_pres_after_trial = timestamp THEN b.account_status END AS account_status_min,
+CASE WHEN last_pres_1st_few_mnths = timestamp THEN b.account_status END AS account_status_max
+
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.gslides_addon_launch_presentation` b
+RIGHT JOIN
+
+(
+SELECT externalid, MIN(timestamp) as first_pres_after_trial, MAX(timestamp) as last_pres_1st_few_mnths
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.gslides_addon_launch_presentation` lp_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf ON lp_i.user_id = uf.externalid
+WHERE ((DATE(timestamp) BETWEEN DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 1 MONTH), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) OR timestamp IS NULL)) 
+AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+AND profile_role <> 'student'
+GROUP BY externalid
+) a
+
+ON b.user_id = a.externalid AND (b.timestamp = a.first_pres_after_trial OR b.timestamp = a.last_pres_1st_few_mnths)
+--Note: count does not exactly equal what's in user facts if user hasn't launched a presentation ever."
+
+query_start_time <- Sys.time()
+df_us <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf) #, allowLargeResults = TRUE
+query_end_time <- Sys.time()
+query_runtime <- query_end_time - query_start_time
+print(round(query_runtime,1))
+
+```
+
+```{r}
+#####################
+# DATA PULL: slide_presented & student_responses NEXT YEAR
+#####################
+
+# NEWEST VERSION
+sql_string <- "SELECT 
+CAST(sp.externalid AS STRING) AS teacher,
+DATE(sp.timestamp) AS Date,
+EXTRACT(HOUR FROM sp.timestamp) AS hour,
+COUNT(DISTINCT sp.presentation_id) as num_presentations,
+COUNT(DISTINCT sr.student) as num_students
+
+FROM 
+
+(SELECT externalid, presentation_id, slide_id, timestamp, DATE(timestamp) as date, EXTRACT(HOUR FROM timestamp) as hour
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented` sp_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf_i 
+ON sp_i.user_id = uf_i.externalid
+WHERE 
+((DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR)) 
+--OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
+--OR timestamp IS NULL)
+)
+AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18') 
+AND profile_role <> 'student'
+) sp 
+
+LEFT JOIN 
+
+(SELECT externalid, teacher, student, presentation, timestamp, slide, DATE(timestamp) as date, EXTRACT(HOUR FROM timestamp) as hour
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` sr_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf_i 
+ON sr_i.teacher = uf_i.externalid
+WHERE app not like '%flash%' 
+AND ((DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR)) 
+--OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
+--OR timestamp IS NULL)
+)
+AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+AND profile_role <> 'student'
+) sr 
+
+ON sp.externalid = sr.externalid AND sp.slide_id = sr.slide AND sp.presentation_id = sr.presentation AND sp.date = sr.date AND sp.hour = sr.hour
+
+GROUP BY sp.externalid, DATE(sp.timestamp), EXTRACT(HOUR FROM sp.timestamp)
+--Note: count does not exactly equal what's in user facts if user hasn't launched a presentation ever.
+"
+
+# Pull data
+# Approximate run time: 7.3 min
+query_start_time <- Sys.time()
+df_sr <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf) #, allowLargeResults = TRUE
+query_end_time <- Sys.time()
+query_runtime <- query_end_time - query_start_time
+print(round(query_runtime,1))
+
+# Add field of date in YYYY-MM format
+df_sr$Date_year_month <- format(df_sr$Date, format="%Y-%m")
+
 ```
