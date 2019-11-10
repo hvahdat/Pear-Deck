@@ -55,7 +55,7 @@ upper_limit_date <- "2019-10-31"
 #####################
 
 # 10 seconds
-sql_string <- "SELECT CAST(externalid as STRING), first_pres_after_trial, last_pres_1st_few_mnths, timestamp, 
+sql_string <- "SELECT CAST(externalid as STRING) as teacher, first_pres_after_trial, last_pres_1st_few_mnths, timestamp, 
 CASE WHEN first_pres_after_trial = timestamp THEN b.account_status END AS account_status_min,
 CASE WHEN last_pres_1st_few_mnths = timestamp THEN b.account_status END AS account_status_max
 
@@ -67,6 +67,7 @@ SELECT externalid, MIN(timestamp) as first_pres_after_trial, MAX(timestamp) as l
 FROM `peardeck-external-projects.buisness_analytics_in_practice_project.gslides_addon_launch_presentation` lp_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf ON lp_i.user_id = uf.externalid
 WHERE ((DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 MONTH) AND DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH)) OR timestamp IS NULL) 
 AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+AND profile_role <> 'student'
 GROUP BY externalid
 ) a
 
@@ -101,9 +102,11 @@ FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_pr
 ON sp_i.user_id = uf_i.externalid
 WHERE 
 ((DATE(timestamp) BETWEEN DATE(FirstSeen) AND DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH)) 
-OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
-OR timestamp IS NULL))
+--OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
+--OR timestamp IS NULL)
+)
 AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18') 
+AND profile_role <> 'student'
 ) sp 
 
 LEFT JOIN 
@@ -113,9 +116,11 @@ FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_
 ON sr_i.teacher = uf_i.externalid
 WHERE app not like '%flash%' 
 AND ((DATE(timestamp) BETWEEN DATE(FirstSeen) AND DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH)) 
-OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
-OR timestamp IS NULL))
+--OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
+--OR timestamp IS NULL)
+)
 AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+AND profile_role <> 'student'
 ) sr 
 
 ON sp.externalid = sr.externalid AND sp.slide_id = sr.slide AND sp.presentation_id = sr.presentation AND sp.date = sr.date AND sp.hour = sr.hour
@@ -200,7 +205,8 @@ df_sr$Date_year_month <- format(df_sr$Date, format="%Y-%m")
 # NEW VERSION
 sql_string <- "SELECT CAST(externalid AS STRING) as teacher, firstseen
 FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` 
-WHERE (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')"
+WHERE (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+AND profile_role <> 'student'"
   
 # sql_string <- "SELECT DISTINCT CAST(externalid AS STRING) AS externalid, profile_role, firstseen, CAST(domain AS STRING) as domain, firstpremiumtime, premiumstatusatsignup, accountType, expirationdate, trial_end, coupon_medium FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` ON `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized`.externalid = `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses`.teacher WHERE DATE(firstseen) < '2019-10-01' AND lower(app) not like '%flash%' AND DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31'"
 
