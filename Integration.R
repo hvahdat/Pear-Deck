@@ -82,7 +82,7 @@ summ <- ungroup(summ)
 #Now we want all users from df_uf, so first I will merge df_uf & df_sr_wide, with df_uf on left
 df_sr_wide <- merge(x= df_uf, y=df_sr_wide, by = "teacher", all.x = TRUE)
 
-#May not want to do this since it ruins 121938 counts
+
 #Now we want to add on the columns from dfuf_into_dfsr on our df_sr_wide
 #df_sr_wide <- merge(x= df_sr_wide, y = entire_dfuf, by = c("teacher","firstseen"), all.x = TRUE)
 
@@ -207,3 +207,45 @@ df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$t
 df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & df_sr_wide$account_status_max == "premiumTrial")] <- "Used Product PremiumTrial"
 # Presented to 2+ but status unknown (i.e. they used the product in the 1st month but not the subsequent months in the time span)
 df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & is.na(df_sr_wide$account_status_max) == TRUE)] <- "Used Product Unknown Status"
+
+
+#####################
+# DATA PULL: add in 2019 account status & account type
+#####################
+
+
+sql_string <- "WITH
+Cohort AS (
+SELECT externalId user_id, currentlyPremium, currentlyOnTrial, accountType
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized`
+WHERE (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+AND profile_role <> 'student'
+)
+
+SELECT CAST(user_id AS STRING) AS teacher, 
+CASE 
+WHEN currentlyPremium = false AND currentlyOnTrial = false THEN 'free'
+WHEN currentlyPremium = true AND currentlyOnTrial = false THEN 'premium'
+WHEN currentlyPremium = true AND currentlyOnTrial = true THEN 'premiumtrial' END AS accountStatus_1yr_later, accountType as accountType_1yr_later
+FROM Cohort"
+
+
+# Pull data
+# Run time: 3.6 sec
+query_start_time <- Sys.time()
+df_as <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
+query_end_time <- Sys.time()
+query_runtime <- query_end_time - query_start_time
+print(round(query_runtime,1))
+
+
+#Merge 2019 account status & account type to df_sr_wide
+df_sr_wide <- merge(x = df_sr_wide, y = df_as, by = "teacher", all.x = TRUE)
+
+
+
+#Running Chi Square and One way ANOVA tests to test for significant diffences
+
+#Chi square test requires a table as an input, this makes sense b/c
+#Chi square compares categorical variable to categorical variable
+#One way Anova compares one categorical variable against a continuous variable
