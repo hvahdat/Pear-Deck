@@ -3,7 +3,8 @@
 # 2. Run Katie's "DATA PULL: User Statuses"
 # 3. Run Katie's "DATA PULL: slide_presented & student_responses"
 # 4. Run Katie's "DATA PULL: user_facts_anonymized"
-
+# 5. Run Katie's "DATA PULL: slide_presented"
+# 6. Run Katie's "CREATE DFs: df_sp_wide"
 
 
 
@@ -208,6 +209,38 @@ df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$t
 # Presented to 2+ but status unknown (i.e. they used the product in the 1st month but not the subsequent months in the time span)
 df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & is.na(df_sr_wide$account_status_max) == TRUE)] <- "Used Product Unknown Status"
 
+#####################
+# ADD: slide diversity to df_sr_wide
+#####################
+
+df_sp_wide$slideDiversity <- as.numeric(0)
+
+for (i in 1:nrow(df_sp_wide)) {
+
+  sum = 0
+  
+  for (j in 1:(ncol(df_sp_wide)-3)) {
+    
+    if(!is.na(df_sp_wide[i, 2+j])) {
+      sum = sum + (df_sp_wide[i, 2+j]*(log(df_sp_wide[i, 2+j], (ncol(df_sp_wide)-3))))
+    }
+    
+  }
+
+  sum = sum * -1
+  
+  df_sp_wide$slideDiversity[i] <- round(sum, 3)
+  
+}
+
+# Create a subset of just the data to merge into df_sr_wide
+df_sp_wide_subset <- df_sp_wide[,c(1,ncol(df_sp_wide))]
+
+# Add slide diversity into df_sp_wide
+df_sr_wide <- merge(x = df_sr_wide, y = df_sp_wide_subset, by = "teacher", all.x = TRUE)
+
+# Copy data set
+df_sp_wide_1st_data_set <- df_sp_wide
 
 #####################
 # DATA PULL: add in 2019 account status & account type
