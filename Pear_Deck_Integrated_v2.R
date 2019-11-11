@@ -1545,18 +1545,29 @@ p <- qplot(total_months_used, data = df_wide2, geom="histogram", facets = . ~ st
 
 ggsave(filename = "Total Months Used by User.png", plot = p, width = 15, height = 7, units = "in")
 
-##### left off here
 # Visualize num_prez_audience
 p <- qplot(num_prez_audience, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
-  scale_x_continuous(name="Number of Months Used") +
+  scale_x_continuous(name="Presentations to an Audience") +
   theme(panel.grid.minor.y = element_blank()) + 
   theme(panel.background = element_blank()) +
-  ggtitle("Total ") + 
+  ggtitle("Total Presentations to an Audience") + 
   theme(text = element_text(size = 14)) + 
   guides(fill=guide_legend(title="Status"))
 
-ggsave(filename = "Total Months Used by User.png", plot = p, width = 15, height = 7, units = "in")
+ggsave(filename = "Presentations to an Audience.png", plot = p, width = 15, height = 7, units = "in")
+
+# Visualize num_prez_testing
+p <- qplot(num_prez_testing, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_continuous(name="Presentation Tests") +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Total Presentations launched Testing Product") + 
+  theme(text = element_text(size = 14)) + 
+  guides(fill=guide_legend(title="Status"))
+
+ggsave(filename = "Presentation Testing.png", plot = p, width = 15, height = 7, units = "in")
 
 ##########################
 # Visualize number of presentations for an audience
