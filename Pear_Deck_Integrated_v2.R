@@ -1424,29 +1424,6 @@ df_wide$total_students[which(is.na(df_wide$total_students))] <- 0
 df_wide$num_prez_audience <- df_wide$total_presentations-(df_wide$total_presentations*df_wide$Num_stu_Testing)
 df_wide$num_prez_testing <- df_wide$total_presentations*df_wide$Num_stu_Testing
 
-# Visualize number of presentations for an audience
-p <- qplot(df_wide$num_prez_audience, geom="histogram", binwidth = 5) +
-  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
-  scale_x_continuous(name="Number of Presentations Given to an Audience") +
-  theme(panel.grid.minor.y = element_blank()) + 
-  theme(panel.background = element_blank()) +
-  ggtitle("Presentations Given to Audience") + 
-  theme(text = element_text(size = 14)) 
-
-ggsave(filename = "Presentations Given to Audience.png", plot = p, width = 15, height = 7, units = "in")
-
-# Visualize number of presentations for an audience (zoomed in)
-p <- qplot(df_wide$num_prez_audience, geom="histogram", binwidth = 5) +
-  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
-  scale_x_continuous(name="Number of Presentations Given to an Audience") +
-  coord_cartesian(xlim = c(0, 30)) +
-  theme(panel.grid.minor.y = element_blank()) + 
-  theme(panel.background = element_blank()) +
-  ggtitle("Presentations Given to Audience (Zoomed In)") + 
-  theme(text = element_text(size = 14)) 
-
-ggsave(filename = "Presentations Given to Audience (Zoomed In).png", plot = p, width = 15, height = 7, units = "in")
-
 # Turn blanks from num_prez_audience & num_prez_testing to zeros
 df_wide$num_prez_audience[which(is.na(df_wide$num_prez_audience))] <- 0
 df_wide$num_prez_testing[which(is.na(df_wide$num_prez_testing))] <- 0
@@ -1455,10 +1432,10 @@ df_wide$num_prez_testing[which(is.na(df_wide$num_prez_testing))] <- 0
 # Initialize column
 df_wide$total_prez_label <- as.character(NA)
 # Add labels
-df_wide$total_prez_label[which(df_wide$total_presentations <= 4)] <- "1_Light"
-df_wide$total_prez_label[which(df_wide$total_presentations >=5 & df_wide$total_presentations <= 9)] <- "2_Medium"
-df_wide$total_prez_label[which(df_wide$total_presentations >=10 & df_wide$total_presentations <= 19)] <- "3_Heavy"
-df_wide$total_prez_label[which(df_wide$total_presentations >= 20)] <- "4_Superuser"
+df_wide$total_prez_label[which(df_wide$total_presentations <= 9)] <- "1_Light"
+df_wide$total_prez_label[which(df_wide$total_presentations >=10 & df_wide$total_presentations <= 19)] <- "2_Medium"
+df_wide$total_prez_label[which(df_wide$total_presentations >=20 & df_wide$total_presentations <= 34)] <- "3_Heavy"
+df_wide$total_prez_label[which(df_wide$total_presentations >= 35)] <- "4_Superuser"
 # Rename the levels (note: did it this way to preserve the desired order)
 df_wide$total_prez_label <- factor(df_wide$total_prez_label)
 levels(df_wide$total_prez_label) <- substr(levels(df_wide$total_prez_label), 3, nchar(levels(df_wide$total_prez_label)))
@@ -1519,7 +1496,7 @@ p <- qplot(total_presentations, data = df_wide2, geom="histogram", facets = . ~ 
 ggsave(filename = "Total Presentations by User.png", plot = p, width = 15, height = 7, units = "in")
 
 # Visualize total_presentations (zoomed in)
-p <- qplot(df_wide2$total_presentations, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
+p <- qplot(total_presentations, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
   scale_x_continuous(name="Number of Total Presentations") +
   coord_cartesian(ylim = c(0, 100)) +
@@ -1532,35 +1509,75 @@ p <- qplot(df_wide2$total_presentations, geom="histogram", facets = . ~ status_l
 ggsave(filename = "Total Presentations by User (zoomed in).png", plot = p, width = 15, height = 7, units = "in")
 
 # Visualize total_students
-p <- qplot(df_wide2$total_students, geom="histogram") + #, binwidth = 5
+p <- qplot(total_students, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
   scale_x_continuous(name="Number of Total Students") +
   theme(panel.grid.minor.y = element_blank()) + 
   theme(panel.background = element_blank()) +
   ggtitle("Total Students Presented to by User") + 
-  theme(text = element_text(size = 14)) 
+  theme(text = element_text(size = 14)) + 
+  guides(fill=guide_legend(title="Status"))
 
 ggsave(filename = "Total Students Presented to by User.png", plot = p, width = 15, height = 7, units = "in")
 
 # Visualize total_students (zoomed in)
-p <- qplot(df_wide2$total_students, geom="histogram") + #, binwidth = 5
+p <- qplot(total_students, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
   scale_x_continuous(name="Number of Total Students") +
-  coord_cartesian(ylim = c(0, 800)) +
+  coord_cartesian(ylim = c(0, 100)) +
   theme(panel.grid.minor.y = element_blank()) + 
   theme(panel.background = element_blank()) +
   ggtitle("Total Students Presented to by User") + 
-  theme(text = element_text(size = 14)) 
+  theme(text = element_text(size = 14)) + 
+  guides(fill=guide_legend(title="Status"))
 
 ggsave(filename = "Total Students Presented to by User (zoomed in).png", plot = p, width = 15, height = 7, units = "in")
 
 # Visualize total_months_used
-p <- qplot(df_wide2$total_months_used, geom="histogram") + #, binwidth = 5
+p <- qplot(total_months_used, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
   scale_x_continuous(name="Number of Months Used") +
   theme(panel.grid.minor.y = element_blank()) + 
   theme(panel.background = element_blank()) +
   ggtitle("Total Months Used by User") + 
-  theme(text = element_text(size = 14)) 
+  theme(text = element_text(size = 14)) + 
+  guides(fill=guide_legend(title="Status"))
 
 ggsave(filename = "Total Months Used by User.png", plot = p, width = 15, height = 7, units = "in")
+
+##### left off here
+# Visualize num_prez_audience
+p <- qplot(num_prez_audience, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_continuous(name="Number of Months Used") +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Total ") + 
+  theme(text = element_text(size = 14)) + 
+  guides(fill=guide_legend(title="Status"))
+
+ggsave(filename = "Total Months Used by User.png", plot = p, width = 15, height = 7, units = "in")
+
+##########################
+# Visualize number of presentations for an audience
+p <- qplot(df_wide2$num_prez_audience, geom="histogram", binwidth = 5) +
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_continuous(name="Number of Presentations Given to an Audience") +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Presentations Given to Audience") + 
+  theme(text = element_text(size = 14)) 
+
+ggsave(filename = "Presentations Given to Audience.png", plot = p, width = 15, height = 7, units = "in")
+
+# Visualize number of presentations for an audience (zoomed in)
+p <- qplot(df_wide2$num_prez_audience, geom="histogram", binwidth = 1) +
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_continuous(name="Number of Presentations Given to an Audience") +
+  coord_cartesian(xlim = c(0, 60)) +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Presentations Given to Audience (Zoomed In)") + 
+  theme(text = element_text(size = 14)) 
+
+ggsave(filename = "Presentations Given to Audience (Zoomed In).png", plot = p, width = 15, height = 7, units = "in")
