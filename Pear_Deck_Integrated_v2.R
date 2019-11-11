@@ -1120,8 +1120,6 @@ FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_fac
 WHERE (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
 AND profile_role <> 'student'"
 
-# sql_string <- "SELECT DISTINCT CAST(externalid AS STRING) AS externalid, profile_role, firstseen, CAST(domain AS STRING) as domain, firstpremiumtime, premiumstatusatsignup, accountType, expirationdate, trial_end, coupon_medium FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` ON `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized`.externalid = `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses`.teacher WHERE DATE(firstseen) < '2019-10-01' AND lower(app) not like '%flash%' AND DATE(timestamp) >= '2017-01-01' AND DATE(timestamp) <= '2019-10-31'"
-
 # Pull data
 # Run time: 1 min
 query_start_time <- Sys.time()
@@ -1304,8 +1302,8 @@ df_sr_wide$status_label <- as.character("")
 
 # Never used
 df_sr_wide$status_label[which( df_sr_wide$total_presentations == 0)] <- "Never Used"
-# Tested Project Only
-df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students <= 1)] <- "Tested Project Only"
+# Tested Product Only
+df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students <= 1)] <- "Tested Product Only"
 # Presented to 2+ went free
 df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & df_sr_wide$account_status_max == "free")] <- "Used Product Free"
 # Presented to 2+ went premium
@@ -1399,6 +1397,14 @@ df_sr_wide <- merge(x = df_sr_wide, y = df_as, by = "teacher", all.x = TRUE)
   }
   
   if (k == 2) {
+    
+    # When status unknown, use user facts status
+    df_sr_wide$status_label[which( df_sr_wide$status_label == "Used Product Unknown Status")] <- df_sr_wide$accountStatus_1yr_later[which( df_sr_wide$status_label == "Used Product Unknown Status")]
+    df_sr_wide$status_label[which( df_sr_wide$status_label == "free")] <- "Used Product Free"
+    df_sr_wide$status_label[which( df_sr_wide$status_label == "premium")] <- "Used Product Premium"
+    df_sr_wide$status_label[which( df_sr_wide$status_label == "premiumtrial")] <- "Used Product PremiumTrial"
+    
+    # Integrate 2019 dataframe into 2018 dataframe
     df_sr_wide_INITIAL$status_label_yr_later <- df_sr_wide$status_label
     df_wide <- df_sr_wide_INITIAL[,-c(which(colnames(df_sr_wide_INITIAL)=="accountStatus_1yr_later"), 
                                       which(colnames(df_sr_wide_INITIAL)=="account_status_min"), 
@@ -1469,3 +1475,81 @@ df_wide$prez_5_plus[which(is.na(df_wide$prez_5_plus))] <- 0
 
 # Merge in AE data
 df_wide <- merge(x = df_wide, y = df_ae, by = "teacher", all.x = TRUE)
+
+# Visual status_label_yr_later
+p <- qplot(df_wide$status_label_yr_later, geom="bar", stat="count") + #, binwidth = 5
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_discrete(name="Statuses") +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Total Users by Statuses") + 
+  theme(text = element_text(size = 14)) 
+
+ggsave(filename = "Total Users by Statuses.png", plot = p, width = 15, height = 7, units = "in")
+
+##############################################################################
+# REMOVE: Never Used & Tested Only
+##############################################################################
+
+df_wide2 <- df_wide[-which(df_wide$status_label_initial_months == "Never Used" | df_wide$status_label_initial_months == "Tested Product Only" | df_wide$status_label_initial_months == "Used Product Unknown Status"), ]
+
+##############################################################################
+# Explore Distributions
+##############################################################################
+
+# Visualize total_presentations
+p <- qplot(df_wide$total_presentations, geom="histogram") + #, binwidth = 5
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_continuous(name="Number of Total Presentations") +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Total Presentations by User") + 
+  theme(text = element_text(size = 14)) 
+
+ggsave(filename = "Total Presentations by User.png", plot = p, width = 15, height = 7, units = "in")
+
+# Visualize total_presentations (zoomed in)
+p <- qplot(df_wide$total_presentations, geom="histogram") + #, binwidth = 5
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_continuous(name="Number of Total Presentations") +
+  coord_cartesian(ylim = c(0, 500)) +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Total Presentations by User (zoomed in)") + 
+  theme(text = element_text(size = 14)) 
+
+ggsave(filename = "Total Presentations by User (zoomed in).png", plot = p, width = 15, height = 7, units = "in")
+
+# Visualize total_students
+p <- qplot(df_wide$total_students, geom="histogram") + #, binwidth = 5
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_continuous(name="Number of Total Students") +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Total Students Presented to by User") + 
+  theme(text = element_text(size = 14)) 
+
+ggsave(filename = "Total Students Presented to by User.png", plot = p, width = 15, height = 7, units = "in")
+
+# Visualize total_students (zoomed in)
+p <- qplot(df_wide$total_students, geom="histogram") + #, binwidth = 5
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_continuous(name="Number of Total Students") +
+  coord_cartesian(ylim = c(0, 800)) +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Total Students Presented to by User") + 
+  theme(text = element_text(size = 14)) 
+
+ggsave(filename = "Total Students Presented to by User (zoomed in).png", plot = p, width = 15, height = 7, units = "in")
+
+# Visualize total_months_used
+p <- qplot(df_wide$total_months_used, geom="histogram") + #, binwidth = 5
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_continuous(name="Number of Months Used") +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Total Months Used by User") + 
+  theme(text = element_text(size = 14)) 
+
+ggsave(filename = "Total Months Used by User.png", plot = p, width = 15, height = 7, units = "in")
