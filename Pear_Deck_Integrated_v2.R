@@ -1488,40 +1488,51 @@ p <- qplot(df_wide$status_label_yr_later, geom="bar", stat="count") + #, binwidt
 ggsave(filename = "Total Users by Statuses.png", plot = p, width = 15, height = 7, units = "in")
 
 ##############################################################################
-# REMOVE: Never Used & Tested Only
+# REMOVE: Never Used, Tested Only & Used Product Unknown Status
 ##############################################################################
 
 df_wide2 <- df_wide[-which(df_wide$status_label_initial_months == "Never Used" | df_wide$status_label_initial_months == "Tested Product Only" | df_wide$status_label_initial_months == "Used Product Unknown Status"), ]
+
+##############################################################################
+# EXPLORE: 2019 PremiumTrial Statuses
+##############################################################################
+
+df_wide2_PremTri <- df_wide2[which(df_wide2$status_label_yr_later == "Used Product PremiumTrial"), ]
+
+
+
 
 ##############################################################################
 # Explore Distributions
 ##############################################################################
 
 # Visualize total_presentations
-p <- qplot(df_wide$total_presentations, geom="histogram") + #, binwidth = 5
+p <- qplot(total_presentations, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
   scale_x_continuous(name="Number of Total Presentations") +
   theme(panel.grid.minor.y = element_blank()) + 
   theme(panel.background = element_blank()) +
   ggtitle("Total Presentations by User") + 
-  theme(text = element_text(size = 14)) 
+  theme(text = element_text(size = 14)) + 
+  guides(fill=guide_legend(title="Status"))
 
 ggsave(filename = "Total Presentations by User.png", plot = p, width = 15, height = 7, units = "in")
 
 # Visualize total_presentations (zoomed in)
-p <- qplot(df_wide$total_presentations, geom="histogram") + #, binwidth = 5
+p <- qplot(df_wide2$total_presentations, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
   scale_x_continuous(name="Number of Total Presentations") +
-  coord_cartesian(ylim = c(0, 500)) +
+  coord_cartesian(ylim = c(0, 100)) +
   theme(panel.grid.minor.y = element_blank()) + 
   theme(panel.background = element_blank()) +
   ggtitle("Total Presentations by User (zoomed in)") + 
-  theme(text = element_text(size = 14)) 
+  theme(text = element_text(size = 14)) + 
+  guides(fill=guide_legend(title="Status"))
 
 ggsave(filename = "Total Presentations by User (zoomed in).png", plot = p, width = 15, height = 7, units = "in")
 
 # Visualize total_students
-p <- qplot(df_wide$total_students, geom="histogram") + #, binwidth = 5
+p <- qplot(df_wide2$total_students, geom="histogram") + #, binwidth = 5
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
   scale_x_continuous(name="Number of Total Students") +
   theme(panel.grid.minor.y = element_blank()) + 
@@ -1532,7 +1543,7 @@ p <- qplot(df_wide$total_students, geom="histogram") + #, binwidth = 5
 ggsave(filename = "Total Students Presented to by User.png", plot = p, width = 15, height = 7, units = "in")
 
 # Visualize total_students (zoomed in)
-p <- qplot(df_wide$total_students, geom="histogram") + #, binwidth = 5
+p <- qplot(df_wide2$total_students, geom="histogram") + #, binwidth = 5
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
   scale_x_continuous(name="Number of Total Students") +
   coord_cartesian(ylim = c(0, 800)) +
@@ -1544,7 +1555,7 @@ p <- qplot(df_wide$total_students, geom="histogram") + #, binwidth = 5
 ggsave(filename = "Total Students Presented to by User (zoomed in).png", plot = p, width = 15, height = 7, units = "in")
 
 # Visualize total_months_used
-p <- qplot(df_wide$total_months_used, geom="histogram") + #, binwidth = 5
+p <- qplot(df_wide2$total_months_used, geom="histogram") + #, binwidth = 5
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
   scale_x_continuous(name="Number of Months Used") +
   theme(panel.grid.minor.y = element_blank()) + 
