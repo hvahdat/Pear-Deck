@@ -1453,16 +1453,28 @@ df_wide$prez_5_plus[which(is.na(df_wide$prez_5_plus))] <- 0
 # Merge in AE data
 df_wide <- merge(x = df_wide, y = df_ae, by = "teacher", all.x = TRUE)
 
+
+# Visual status_label_initial_months
+p <- qplot(df_wide$status_label_initial_months, geom="bar", stat="count") + #, binwidth = 5
+  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+  scale_x_discrete(name="Statuses") +
+  theme(panel.grid.minor.y = element_blank()) + 
+  theme(panel.background = element_blank()) +
+  ggtitle("Total Users by Statuses (Initial Months)") + 
+  theme(text = element_text(size = 14)) 
+
+ggsave(filename = "Total Users by Statuses (Initial Months).png", plot = p, width = 15, height = 7, units = "in")
+
 # Visual status_label_yr_later
 p <- qplot(df_wide$status_label_yr_later, geom="bar", stat="count") + #, binwidth = 5
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
   scale_x_discrete(name="Statuses") +
   theme(panel.grid.minor.y = element_blank()) + 
   theme(panel.background = element_blank()) +
-  ggtitle("Total Users by Statuses") + 
+  ggtitle("Total Users by Statuses (Year Later)") + 
   theme(text = element_text(size = 14)) 
 
-ggsave(filename = "Total Users by Statuses.png", plot = p, width = 15, height = 7, units = "in")
+ggsave(filename = "Total Users by Statuses (Year Later).png", plot = p, width = 15, height = 7, units = "in")
 
 ##############################################################################
 # REMOVE: Never Used, Tested Only & Used Product Unknown Status
