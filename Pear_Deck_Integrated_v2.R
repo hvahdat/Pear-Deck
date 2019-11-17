@@ -50,7 +50,7 @@ upper_limit_date <- "2019-10-31"
 
 sql_string <- "WITH
 Teachers1 AS (
-SELECT distinct teacher, min (timestamp) firstTimeTeacher
+SELECT distinct f0_ as teacher, min (timestamp) firstTimeTeacher
 FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responded`
 GROUP BY teacher
 ),
@@ -1350,7 +1350,7 @@ df_sr_wide <- merge(x = df_sr_wide, y = df_sp_wide_subset, by = "teacher", all.x
 
 sql_string <- "WITH
 Cohort AS (
-SELECT externalId user_id, currentlyPremium, currentlyOnTrial, accountType
+SELECT externalId user_id, PrimaryAccountDetails.currentlyPremium, PrimaryAccountDetails.currentlyOnTrial, PrimaryAccountDetails.accountType
 FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized`
 WHERE (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
 AND profile_role <> 'student'
