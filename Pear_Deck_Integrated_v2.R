@@ -1487,10 +1487,10 @@ plot_bar <- function(dfx, xaxistitle, title, w = 15, h = 7, bw=0, xcart = 0)
 
 
 # Bar plot: status_label_initial_months
-plot_bar_hist(dfx=df_wide$status_label_initial_months, geomtype="bar", xaxistitle="Statuses", title="Total Users by Statuses (Initial Months)")
+plot_bar(dfx=df_wide$status_label_initial_months, xaxistitle="Statuses", title="Total Users by Statuses (Initial Months)")
 
 # Bar Plot: status_label_yr_later
-plot_bar_hist(dfx=df_wide$status_label_yr_later, geomtype="bar", xaxistitle="Statuses", title="Total Users by Statuses (Year Later)")
+plot_bar(dfx=df_wide$status_label_yr_later, xaxistitle="Statuses", title="Total Users by Statuses (Year Later)")
 
 # Histogram plot: # of presentations for an audience
 p <- qplot(df_wide2$num_prez_audience, geom="histogram", binwidth = 5) +
