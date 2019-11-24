@@ -19,6 +19,7 @@ library(tidyverse)
 library(tidyr)
 library(scales)
 library(zoo)
+library(data.table)
 
 # Set working directory
 setwd("C:\\Users\\katie\\Dropbox\\Grad School - Business Analytics Masters Program\\2019 Fall Classes\\Pear Deck - Analytics Experience\\R Scripts")
@@ -27,7 +28,10 @@ setwd("C:\\Users\\katie\\Dropbox\\Grad School - Business Analytics Masters Progr
 project_id <- "peardeck-external-projects"
 
 # Set upper limit date to included usage data 
-upper_limit_date <- "2019-10-31"
+upper_limit_date <- Sys.Date()
+
+# Set FirstSeen date range (to be used in the query pulls below)
+firstSeen <- "BETWEEN '2018-08-05' AND '2018-08-18'"
 
 #####################
 # SETUP NOTES
@@ -94,7 +98,7 @@ df_ppb4 <- df_ppb4[,c(1,4)]
 # DATA PULL: Teachers who presented 5+ presentations in a year
 #####################
 
-sql_string <- "SELECT teacher, 
+sql_string <- paste("SELECT teacher, 
 CASE 
 WHEN SUM(num_presentations) >= 5 THEN 1
 ELSE 0
@@ -119,7 +123,7 @@ FROM
   --OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
   --OR timestamp IS NULL)
   )
-  AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18') 
+  AND (DATE(FirstSeen)", firstSeen, ") 
   AND profile_role <> 'student'
   ) sp 
   
@@ -133,7 +137,7 @@ FROM
   --OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
   --OR timestamp IS NULL)
   )
-  AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+  AND (DATE(FirstSeen) ", firstSeen, ")
   AND profile_role <> 'student'
   ) sr 
   
@@ -143,14 +147,15 @@ FROM
   --Note: count does not exactly equal what's in user facts if user hasn't launched a presentation ever.
 ) z
   GROUP BY teacher"
-  
+)
+
 df_5_plus <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
 
 #####################
 # DATA PULL: app_events
 #####################
 
-sql_string = "SELECT CAST(user_id as STRING) as teacher,  SUM(CASE WHEN Event IN 
+sql_string = paste("SELECT CAST(user_id as STRING) as teacher,  SUM(CASE WHEN Event IN 
 ('successfully_invited_10_students',
 'gslides_addon_show_how_it_works',
 'gslides_addon_library_template_added',
@@ -880,10 +885,11 @@ THEN 1 ELSE 0 END) AS before_signup_count
 FROM `peardeck-external-projects.buisness_analytics_in_practice_project.app_events` ae JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf ON ae.user_id = uf.externalid
 
 WHERE (DATE(timestamp) BETWEEN DATE(FirstSeen) AND DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH))
-AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18') 
+AND (DATE(FirstSeen) ", firstSeen, ") 
 AND profile_role <> 'student'
 
 GROUP BY user_id"
+)
 
 df_ae <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
 
@@ -900,7 +906,8 @@ for (k in 1:2) {
     #####################
     
     # 10 seconds
-    sql_string <- "SELECT CAST(externalid as STRING) as teacher, first_pres_after_trial, last_pres_1st_few_mnths, timestamp, 
+    sql_string <- paste(
+    "SELECT CAST(externalid as STRING) as teacher, first_pres_after_trial, last_pres_1st_few_mnths, timestamp, 
     CASE WHEN first_pres_after_trial = timestamp THEN b.account_status END AS account_status_min,
     CASE WHEN last_pres_1st_few_mnths = timestamp THEN b.account_status END AS account_status_max
     
@@ -911,13 +918,14 @@ for (k in 1:2) {
     SELECT externalid, MIN(timestamp) as first_pres_after_trial, MAX(timestamp) as last_pres_1st_few_mnths
     FROM `peardeck-external-projects.buisness_analytics_in_practice_project.gslides_addon_launch_presentation` lp_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf ON lp_i.user_id = uf.externalid
     WHERE ((DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 MONTH) AND DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH)) OR timestamp IS NULL) 
-    AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+    AND (DATE(FirstSeen) ", firstSeen, ")
     AND profile_role <> 'student'
     GROUP BY externalid
     ) a
     
     ON b.user_id = a.externalid AND (b.timestamp = a.first_pres_after_trial OR b.timestamp = a.last_pres_1st_few_mnths)
     --Note: count does not exactly equal what's in user facts if user hasn't launched a presentation ever."
+    )
     
     query_start_time <- Sys.time()
     df_us <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf) #, allowLargeResults = TRUE
@@ -931,7 +939,8 @@ for (k in 1:2) {
     #####################
     
     # NEWEST VERSION
-    sql_string <- "SELECT 
+    sql_string <- paste(
+    "SELECT 
     CAST(sp.externalid AS STRING) AS teacher,
     presentation_id,
     DATE(sp.timestamp) AS Date,
@@ -949,7 +958,7 @@ for (k in 1:2) {
     --OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
     --OR timestamp IS NULL)
     )
-    AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18') 
+    AND (DATE(FirstSeen) ", firstSeen, ") 
     AND profile_role <> 'student'
     ) sp 
     
@@ -963,7 +972,7 @@ for (k in 1:2) {
     --OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
     --OR timestamp IS NULL)
     )
-    AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+    AND (DATE(FirstSeen) ", firstSeen, ")
     AND profile_role <> 'student'
     ) sr 
     
@@ -972,6 +981,7 @@ for (k in 1:2) {
     GROUP BY sp.externalid, presentation_id, DATE(sp.timestamp), EXTRACT(HOUR FROM sp.timestamp)
     --Note: count does not exactly equal what's in user facts if user hasn't launched a presentation ever.
     "
+    )
     
     # Note: structured the query this way because slide_id can be null
     
@@ -998,7 +1008,8 @@ for (k in 1:2) {
     #####################
     
     # 10 seconds
-    sql_string <- "SELECT CAST(externalid as STRING) as teacher, first_pres_after_trial, last_pres_1st_few_mnths, timestamp, 
+    sql_string <- paste(
+    "SELECT CAST(externalid as STRING) as teacher, first_pres_after_trial, last_pres_1st_few_mnths, timestamp, 
     CASE WHEN first_pres_after_trial = timestamp THEN b.account_status END AS account_status_min,
     CASE WHEN last_pres_1st_few_mnths = timestamp THEN b.account_status END AS account_status_max
     
@@ -1009,13 +1020,14 @@ for (k in 1:2) {
     SELECT externalid, MIN(timestamp) as first_pres_after_trial, MAX(timestamp) as last_pres_1st_few_mnths
     FROM `peardeck-external-projects.buisness_analytics_in_practice_project.gslides_addon_launch_presentation` lp_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf ON lp_i.user_id = uf.externalid
     WHERE ((DATE(timestamp) BETWEEN DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 1 MONTH), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) OR timestamp IS NULL)) 
-    AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+    AND (DATE(FirstSeen) ", firstSeen, ")
     AND profile_role <> 'student'
     GROUP BY externalid
     ) a
     
     ON b.user_id = a.externalid AND (b.timestamp = a.first_pres_after_trial OR b.timestamp = a.last_pres_1st_few_mnths)
     --Note: count does not exactly equal what's in user facts if user hasn't launched a presentation ever."
+    )
     
     query_start_time <- Sys.time()
     df_us <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf) #, allowLargeResults = TRUE
@@ -1028,7 +1040,8 @@ for (k in 1:2) {
     #####################
     
     # NEWEST VERSION
-    sql_string <- "SELECT 
+    sql_string <- paste(
+    "SELECT 
     CAST(sp.externalid AS STRING) AS teacher,
     presentation_id,
     DATE(sp.timestamp) AS Date,
@@ -1046,7 +1059,7 @@ for (k in 1:2) {
     --OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
     --OR timestamp IS NULL)
     )
-    AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18') 
+    AND (DATE(FirstSeen) ", firstSeen, ") 
     AND profile_role <> 'student'
     ) sp 
     
@@ -1060,7 +1073,7 @@ for (k in 1:2) {
     --OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
     --OR timestamp IS NULL)
     )
-    AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+    AND (DATE(FirstSeen) ", firstSeen, ")
     AND profile_role <> 'student'
     ) sr 
     
@@ -1069,6 +1082,7 @@ for (k in 1:2) {
     GROUP BY sp.externalid, presentation_id, DATE(sp.timestamp), EXTRACT(HOUR FROM sp.timestamp)
     --Note: count does not exactly equal what's in user facts if user hasn't launched a presentation ever.
     "
+    )
     
     # Pull data
     # Approximate run time: 7.3 min
@@ -1087,18 +1101,20 @@ for (k in 1:2) {
 # DATA PULL: slide_presented
 #####################
 
-sql_string <- "SELECT user_id, slide_type, SUM(slide_type_ct) AS slide_type_ct 
+sql_string <- paste(
+"SELECT user_id, slide_type, SUM(slide_type_ct) AS slide_type_ct 
 FROM (
 
 SELECT CAST(user_id AS STRING) AS user_id, presentation_id, slide_id, slide_type, DATE(timestamp) as Date, EXTRACT(HOUR FROM timestamp) as Hour, COUNT(DISTINCT user_id) AS slide_type_ct 
 FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented` sp JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf ON sp.user_id = uf.externalid
 WHERE ((DATE(timestamp) BETWEEN DATE(FirstSeen) AND DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH))
-AND (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18') AND profile_role <> 'student')
+AND (DATE(FirstSeen) ", firstSeen, ") AND profile_role <> 'student')
 GROUP BY user_id, presentation_id, slide_id, slide_type, DATE(timestamp), EXTRACT(HOUR FROM timestamp)
 ) 
 
 GROUP BY user_id, slide_type
 "
+)
 
 # Pull data
 # Run time: 3 min
@@ -1114,11 +1130,12 @@ names(df_sp)[names(df_sp) == "user_id"] <- "teacher"
 # DATA PULL: user_facts_anonymized
 #####################
 
-# NEW VERSION
-sql_string <- "SELECT CAST(externalid AS STRING) as teacher, firstseen
+sql_string <- paste(
+"SELECT CAST(externalid AS STRING) as teacher, firstseen
 FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` 
-WHERE (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+WHERE (DATE(FirstSeen) ", firstSeen, ")
 AND profile_role <> 'student'"
+)
 
 # Pull data
 # Run time: 1 min
@@ -1134,7 +1151,7 @@ print(round(query_runtime,1))
 
 # Create summary: total slides per teacher
 df_sp <- group_by(df_sp, teacher)
-summ <- summarize(df_sp, total_slides = sum(slide_type_ct))
+summ <- summarise(df_sp, total_slides = sum(slide_type_ct))
 df_sp <- ungroup(df_sp)
 
 # Merge total_slides into df_sp
@@ -1146,21 +1163,18 @@ df_sp$slide_type_amt_norm <- df_sp$slide_type_ct/df_sp$total_slides
 # Create df_sp_wide
 df_sp_wide <- dcast(df_sp, teacher + total_slides ~  slide_type, value.var = "slide_type_amt_norm")
 
-##############################################################################
-# Begin integrated script
-##############################################################################
+### Generated "subscription status" field cleanup
 
-#collapse df_us to only have unique teachers (per row), should return 118,466
+#collapse df_us to only have unique teachers (per row)
 df_us$timestamp <- NULL
 
 #do this to merge teachers into one row
-library(data.table)
 df_us <- dcast(setDT(df_us), teacher ~ rowid(teacher), value.var = c("first_pres_after_trial",
                                                                      "last_pres_1st_few_mnths",
                                                                      "account_status_min",
                                                                      "account_status_max"))
 
-#Here we need to merge 2 columns into one, since min and max often fill in either column 1 or 2
+# Merge 2 columns into one, since min and max often fill in either column 1 or 2
 df_us$account_status_min_1[is.na(df_us$account_status_min_1)] <- ""
 df_us$account_status_min_2[is.na(df_us$account_status_min_2)] <- ""
 df_us$account_status_max_1[is.na(df_us$account_status_max_1)] <- ""
@@ -1183,7 +1197,7 @@ entire_dfuf <- merge(x = dfus_into_dfuf, y = df_sr, by = "teacher", all.x = TRUE
 
 # Create summary: presentations by year/month
 entire_dfuf <- group_by(entire_dfuf, teacher, Date_year_month)
-summ  <- summarize(entire_dfuf, num_presentations = sum(num_presentations)) 
+summ  <- summarise(entire_dfuf, num_presentations = sum(num_presentations)) 
 entire_dfuf <- ungroup(entire_dfuf)
 
 # Create wide df
@@ -1193,20 +1207,19 @@ df_sr_wide <- df_sr_wide[,-which(colnames(df_sr_wide)=="NA")]
 
 # Create new col summing num_students: total_students
 entire_dfuf <- group_by(entire_dfuf, teacher)
-summ5  <- summarize(entire_dfuf, total_students = sum(num_students)) 
+summ5  <- summarise(entire_dfuf, total_students = sum(num_students)) 
 entire_dfuf <- ungroup(entire_dfuf)
 
 # Create new col in df_sr_wide: total_presentations & total_months_used
 summ <- group_by(summ, teacher)
-summ2 <- summarize(summ, num_presentations = sum(num_presentations))
-summ3 <- summarize(summ, total_months_used = sum(!is.na(Date_year_month)) )
+summ2 <- summarise(summ, num_presentations = sum(num_presentations))
+summ3 <- summarise(summ, total_months_used = sum(!is.na(Date_year_month)) )
 summ <- ungroup(summ)
 
-#Now we want all users from df_uf, so first I will merge df_uf & df_sr_wide, with df_uf on left
+# Merge df_uf & df_sr_wide, with df_uf on left (to get new users from df_uf)
 df_sr_wide <- merge(x= df_uf, y=df_sr_wide, by = "teacher", all.x = TRUE)
 
-
-#Now we want to add on the columns from dfuf_into_dfsr on our df_sr_wide
+# Add columns from dfuf_into_dfsr on df_sr_wide
 #df_sr_wide <- merge(x= df_sr_wide, y = entire_dfuf, by = c("teacher","firstseen"), all.x = TRUE)
 
 ### Add to df_sr_wide: # Presentations by user & Total Months by user
@@ -1216,7 +1229,6 @@ df_sr_wide$total_months_used <- summ3$total_months_used
 
 df_sr_wide$total_presentations[is.na(df_sr_wide$total_presentations)]<- 0
 df_sr$num_students[is.na(df_sr$num_students)] <- 0 
-
 
 ### Student Engagement
 
@@ -1235,7 +1247,7 @@ levels(df_sr$num_students_label) <- paste("Num_stu_", substr(levels(df_sr$num_st
 
 # Create summary: Count in each student engagement bucket by user
 df_sr <- group_by(df_sr, teacher, num_students_label)
-summ  <- summarize(df_sr, num_students_label_ct = n()) 
+summ  <- summarise(df_sr, num_students_label_ct = n()) 
 df_sr <- ungroup(df_sr)
 # Merge in total_presentations
 summ <- merge(summ, df_sr_wide[,c(which(colnames(df_sr_wide)=="teacher"),which(colnames(df_sr_wide)=="total_presentations"))])
@@ -1252,7 +1264,7 @@ df_sr$Date_year_month_2 <- as.Date(paste(df_sr$Date_year_month, "-01", sep=""))
 
 # Create summary: review first and last use dates
 df_sr <- group_by(df_sr, teacher)
-summ  <- summarize(df_sr, YM_first_use = min(Date_year_month_2), YM_last_use = max(Date_year_month_2)) 
+summ  <- summarise(df_sr, YM_first_use = min(Date_year_month_2), YM_last_use = max(Date_year_month_2)) 
 df_sr <- ungroup(df_sr)
 summ$months_bw_1st_last_use <- ((as.yearmon(strptime(summ$YM_last_use, format = "%Y-%m-%d")) - as.yearmon(strptime(summ$YM_first_use, format = "%Y-%m-%d")))*12)+1
 
@@ -1284,18 +1296,8 @@ df_statuses <- entire_dfuf[ , c(which(colnames(entire_dfuf)=="teacher"), which(c
 # Remove duplicates
 df_statuses <- unique(df_statuses)
 
-# # Exploring account status
-# # Examine the unique combinations (delete later)
-# df_statuses <- group_by(df_statuses, account_status_min, account_status_max)
-# summ_status <- summarize(df_statuses, total = n())
-# df_statuses <- ungroup(df_statuses)
-
 # Merge df_statuses into df_sr_wide
 df_sr_wide <- merge(x = df_sr_wide, y = df_statuses, by = "teacher", all.x = TRUE)
-
-# entire_dfuf <- group_by(entire_dfuf, teacher)
-# summ5 <- summarize(entire_dfuf, )
-# entire_dfuf <- ungroup(entire_dfuf)
 
 # Create empty column
 df_sr_wide$status_label <- as.character("")
@@ -1345,14 +1347,15 @@ df_sr_wide <- merge(x = df_sr_wide, y = df_sp_wide_subset, by = "teacher", all.x
 
 
 #####################
-# DATA PULL: add in 2019 account status & account type
+# DATA PULL: add in year later account status & account type
 #####################
 
-sql_string <- "WITH
+sql_string <- paste(
+"WITH
 Cohort AS (
 SELECT externalId user_id, PrimaryAccountDetails.currentlyPremium, PrimaryAccountDetails.currentlyOnTrial, PrimaryAccountDetails.accountType
 FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized`
-WHERE (DATE(FirstSeen) BETWEEN '2018-08-05' AND '2018-08-18')
+WHERE (DATE(FirstSeen) ", firstSeen, ")
 AND profile_role <> 'student'
 )
 
@@ -1362,7 +1365,7 @@ WHEN currentlyPremium = false AND currentlyOnTrial = false THEN 'free'
 WHEN currentlyPremium = true AND currentlyOnTrial = false THEN 'premium'
 WHEN currentlyPremium = true AND currentlyOnTrial = true THEN 'premiumtrial' END AS accountStatus_1yr_later, accountType as accountType_1yr_later
 FROM Cohort"
-
+)
 
 # Pull data
 # Run time: 3.6 sec
@@ -1378,13 +1381,6 @@ df_as$accountType_1yr_later[which(df_as$accountType_1yr_later == "individual - s
 #Merge 2019 account status & account type to df_sr_wide
 df_sr_wide <- merge(x = df_sr_wide, y = df_as, by = "teacher", all.x = TRUE)
 
-
-
-#Running Chi Square and One way ANOVA tests to test for significant diffences
-
-#Chi square test requires a table as an input, this makes sense b/c
-#Chi square compares categorical variable to categorical variable
-#One way Anova compares one categorical variable against a continuous variable
 
 ##############################################################################
 # Integrate initial months with 1 year later
@@ -1404,8 +1400,9 @@ df_sr_wide <- merge(x = df_sr_wide, y = df_as, by = "teacher", all.x = TRUE)
     df_sr_wide$status_label[which( df_sr_wide$status_label == "premium")] <- "Used Product Premium"
     df_sr_wide$status_label[which( df_sr_wide$status_label == "premiumtrial")] <- "Used Product PremiumTrial"
     
-    # Integrate 2019 dataframe into 2018 dataframe
+    # Integrate initial months and year later DFs into one
     df_sr_wide_INITIAL$status_label_yr_later <- df_sr_wide$status_label
+    df_sr_wide_INITIAL$total_presentations_yr_later <- df_sr_wide$total_presentations
     df_wide <- df_sr_wide_INITIAL[,-c(which(colnames(df_sr_wide_INITIAL)=="accountStatus_1yr_later"), 
                                       which(colnames(df_sr_wide_INITIAL)=="account_status_min"), 
                                       which(colnames(df_sr_wide_INITIAL)=="account_status_max"))]
@@ -1453,29 +1450,6 @@ df_wide$prez_5_plus[which(is.na(df_wide$prez_5_plus))] <- 0
 # Merge in AE data
 df_wide <- merge(x = df_wide, y = df_ae, by = "teacher", all.x = TRUE)
 
-
-# Visual status_label_initial_months
-p <- qplot(df_wide$status_label_initial_months, geom="bar", stat="count") + #, binwidth = 5
-  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
-  scale_x_discrete(name="Statuses") +
-  theme(panel.grid.minor.y = element_blank()) + 
-  theme(panel.background = element_blank()) +
-  ggtitle("Total Users by Statuses (Initial Months)") + 
-  theme(text = element_text(size = 14)) 
-
-ggsave(filename = "Total Users by Statuses (Initial Months).png", plot = p, width = 15, height = 7, units = "in")
-
-# Visual status_label_yr_later
-p <- qplot(df_wide$status_label_yr_later, geom="bar", stat="count") + #, binwidth = 5
-  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
-  scale_x_discrete(name="Statuses") +
-  theme(panel.grid.minor.y = element_blank()) + 
-  theme(panel.background = element_blank()) +
-  ggtitle("Total Users by Statuses (Year Later)") + 
-  theme(text = element_text(size = 14)) 
-
-ggsave(filename = "Total Users by Statuses (Year Later).png", plot = p, width = 15, height = 7, units = "in")
-
 ##############################################################################
 # REMOVE: Never Used, Tested Only & Used Product Unknown Status
 ##############################################################################
@@ -1488,101 +1462,37 @@ df_wide2 <- df_wide[-which(df_wide$status_label_initial_months == "Never Used" |
 
 df_wide2_PremTri <- df_wide2[which(df_wide2$status_label_yr_later == "Used Product PremiumTrial"), ]
 
-
-
-
 ##############################################################################
 # Explore Distributions
 ##############################################################################
 
-# Visualize total_presentations
-p <- qplot(total_presentations, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
-  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
-  scale_x_continuous(name="Number of Total Presentations") +
-  theme(panel.grid.minor.y = element_blank()) + 
-  theme(panel.background = element_blank()) +
-  ggtitle("Total Presentations by User") + 
-  theme(text = element_text(size = 14)) + 
-  guides(fill=guide_legend(title="Status"))
+#######################################
+# Dependent Variables
+#######################################
 
-ggsave(filename = "Total Presentations by User.png", plot = p, width = 15, height = 7, units = "in")
+# Create bar/histogram plotting function
+plot_bar <- function(dfx, xaxistitle, title, w = 15, h = 7, bw=0, xcart = 0) 
+  {
+    p <- qplot(dfx, geom=geomtype, stat="count") + 
+    scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
+    scale_x_discrete(name=xaxistitle) +
+    coord_cartesian(xlim = c(0, xcart)) +
+    theme(panel.grid.minor.y = element_blank()) + 
+    theme(panel.background = element_blank()) +
+    ggtitle(title) +
+    theme(text = element_text(size = 14)) 
+    
+    ggsave(filename = paste(title, ".png", sep=""), plot = p, width = w, height = h, units = "in")
+  }
 
-# Visualize total_presentations (zoomed in)
-p <- qplot(total_presentations, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
-  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
-  scale_x_continuous(name="Number of Total Presentations") +
-  coord_cartesian(ylim = c(0, 100)) +
-  theme(panel.grid.minor.y = element_blank()) + 
-  theme(panel.background = element_blank()) +
-  ggtitle("Total Presentations by User (zoomed in)") + 
-  theme(text = element_text(size = 14)) + 
-  guides(fill=guide_legend(title="Status"))
 
-ggsave(filename = "Total Presentations by User (zoomed in).png", plot = p, width = 15, height = 7, units = "in")
+# Bar plot: status_label_initial_months
+plot_bar_hist(dfx=df_wide$status_label_initial_months, geomtype="bar", xaxistitle="Statuses", title="Total Users by Statuses (Initial Months)")
 
-# Visualize total_students
-p <- qplot(total_students, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
-  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
-  scale_x_continuous(name="Number of Total Students") +
-  theme(panel.grid.minor.y = element_blank()) + 
-  theme(panel.background = element_blank()) +
-  ggtitle("Total Students Presented to by User") + 
-  theme(text = element_text(size = 14)) + 
-  guides(fill=guide_legend(title="Status"))
+# Bar Plot: status_label_yr_later
+plot_bar_hist(dfx=df_wide$status_label_yr_later, geomtype="bar", xaxistitle="Statuses", title="Total Users by Statuses (Year Later)")
 
-ggsave(filename = "Total Students Presented to by User.png", plot = p, width = 15, height = 7, units = "in")
-
-# Visualize total_students (zoomed in)
-p <- qplot(total_students, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
-  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
-  scale_x_continuous(name="Number of Total Students") +
-  coord_cartesian(ylim = c(0, 100)) +
-  theme(panel.grid.minor.y = element_blank()) + 
-  theme(panel.background = element_blank()) +
-  ggtitle("Total Students Presented to by User") + 
-  theme(text = element_text(size = 14)) + 
-  guides(fill=guide_legend(title="Status"))
-
-ggsave(filename = "Total Students Presented to by User (zoomed in).png", plot = p, width = 15, height = 7, units = "in")
-
-# Visualize total_months_used
-p <- qplot(total_months_used, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
-  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
-  scale_x_continuous(name="Number of Months Used") +
-  theme(panel.grid.minor.y = element_blank()) + 
-  theme(panel.background = element_blank()) +
-  ggtitle("Total Months Used by User") + 
-  theme(text = element_text(size = 14)) + 
-  guides(fill=guide_legend(title="Status"))
-
-ggsave(filename = "Total Months Used by User.png", plot = p, width = 15, height = 7, units = "in")
-
-# Visualize num_prez_audience
-p <- qplot(num_prez_audience, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
-  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
-  scale_x_continuous(name="Presentations to an Audience") +
-  theme(panel.grid.minor.y = element_blank()) + 
-  theme(panel.background = element_blank()) +
-  ggtitle("Total Presentations to an Audience") + 
-  theme(text = element_text(size = 14)) + 
-  guides(fill=guide_legend(title="Status"))
-
-ggsave(filename = "Presentations to an Audience.png", plot = p, width = 15, height = 7, units = "in")
-
-# Visualize num_prez_testing
-p <- qplot(num_prez_testing, data = df_wide2, geom="histogram", facets = . ~ status_label_yr_later, fill = status_label_yr_later) + #, binwidth = 5
-  scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
-  scale_x_continuous(name="Presentation Tests") +
-  theme(panel.grid.minor.y = element_blank()) + 
-  theme(panel.background = element_blank()) +
-  ggtitle("Total Presentations launched Testing Product") + 
-  theme(text = element_text(size = 14)) + 
-  guides(fill=guide_legend(title="Status"))
-
-ggsave(filename = "Presentation Testing.png", plot = p, width = 15, height = 7, units = "in")
-
-##########################
-# Visualize number of presentations for an audience
+# Histogram plot: # of presentations for an audience
 p <- qplot(df_wide2$num_prez_audience, geom="histogram", binwidth = 5) +
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
   scale_x_continuous(name="Number of Presentations Given to an Audience") +
@@ -1593,7 +1503,7 @@ p <- qplot(df_wide2$num_prez_audience, geom="histogram", binwidth = 5) +
 
 ggsave(filename = "Presentations Given to Audience.png", plot = p, width = 15, height = 7, units = "in")
 
-# Visualize number of presentations for an audience (zoomed in)
+# Histogram plot: # of presentations for an audience (zoomed in)
 p <- qplot(df_wide2$num_prez_audience, geom="histogram", binwidth = 1) +
   scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
   scale_x_continuous(name="Number of Presentations Given to an Audience") +
@@ -1604,3 +1514,70 @@ p <- qplot(df_wide2$num_prez_audience, geom="histogram", binwidth = 1) +
   theme(text = element_text(size = 14)) 
 
 ggsave(filename = "Presentations Given to Audience (Zoomed In).png", plot = p, width = 15, height = 7, units = "in")
+
+
+#######################################
+# Independent Variables viewed proportionally against Dependent Variable
+#######################################
+
+# Create proportional, facetted plotting function
+prop_plot <- function(df = df_wide2, x, facet = df_wide2$status_label_yr_later, xaxistitle, title, legendtitle = "Status", w = 15, h = 7) #, zoomY=0
+{
+  #if(zoomY != 0) title = paste(title,"(zoomed in)")
+  
+  # Load libraries
+  library(tidyverse)
+  library(scales) 
+  
+  # Generate counts for every number of x for every facet.
+  df <- group_by(df, !! facet, !! x)
+  df_prop1 <- summarise(df, n = n())
+  df <- ungroup(df)
+  
+  # Sum the counts and report by facet label
+  df_prop1 <- group_by(df_prop1, `<chr>`)
+  df_prop2 <- summarise(df_prop1, total =sum(n))
+  df_prop1 <- ungroup(df_prop1)
+  
+  # Add the status label totals together with the counts
+  df_prop <<- merge(x=df_prop1, y=df_prop2, by = "<chr>", all.x = TRUE)
+  
+  # Create proportion 
+  df_prop$prop <<- df_prop$n/df_prop$total
+  
+  # Visualize x
+  p <- ggplot(aes(x=`<dbl>`,y=prop, fill = `<chr>`), data = df_prop) + #, binwidth = 5
+    geom_bar(stat = 'identity') +
+    facet_grid(. ~ `<chr>`) +
+    scale_y_continuous(name = "Percentage", labels = percent) + 
+    scale_x_continuous(name=xaxistitle) +
+    theme(panel.grid.minor.y = element_blank()) + 
+    theme(panel.background = element_blank()) +
+    ggtitle(title) + 
+    theme(text = element_text(size = 14)) + 
+    guides(fill=guide_legend(title=legendtitle))
+  
+  #if(zoomY != 0) p + coord_cartesian(ylim = c(0, zoomY))
+  
+  ggsave(filename = paste(title, ".png", sep=""), plot = p, width = w, height = h, units = "in")
+  print(p)
+  
+}
+
+prop_plot(x = df_wide2$total_presentations, xaxistitle = "Total Presentations", title = "Total Presentations by User")
+prop_plot(x = df_wide2$total_students, xaxistitle = "Total Students", title = "Total Students Presented to by User")
+prop_plot(x = df_wide2$total_months_used, xaxistitle = "Number of Months Used", title = "Total Months Used by User")
+prop_plot(x = df_wide2$num_prez_audience, xaxistitle = "Number of Presentations to an Audience", title = "Total Presentations to an Audience")
+prop_plot(x = df_wide2$num_prez_testing, xaxistitle = "Presentation Tests", title = "Total Presentations launched Testing Product")
+prop_plot(x = df_wide2$num_prez_audience, xaxistitle = "Number of Presentations Given to an Audience", title = "Presentations Given to Audience")
+
+
+##############################################################################
+# Analysis
+##############################################################################
+
+#Running Chi Square and One way ANOVA tests to test for significant diffences
+
+#Chi square test requires a table as an input, this makes sense b/c
+#Chi square compares categorical variable to categorical variable
+#One way Anova compares one categorical variable against a continuous variable
