@@ -1353,6 +1353,34 @@ df_sp_wide_subset <- df_sp_wide[,c(1,ncol(df_sp_wide))]
 # Add slide diversity into df_sp_wide
 df_sr_wide <- merge(x = df_sr_wide, y = df_sp_wide_subset, by = "teacher", all.x = TRUE)
 
+#####################
+# DATA PULL: Teachers who have used flashcard factory
+#####################
+
+sql_string <- paste("
+SELECT CAST(externalid as STRING) as teacher, COUNT(externalid) as num_flash_use
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` sr_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf_i 
+ON sr_i.teacher = uf_i.externalid
+WHERE app like '%flash%' AND ((DATE(timestamp) BETWEEN DATE(FirstSeen) AND DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH))) 
+AND (DATE(FirstSeen) ", firstSeen, ")
+GROUP BY CAST(externalid as STRING)
+"
+)
+
+# Save into dataframe
+df_ff <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
+
+# Add binary column: ff_use
+df_ff$ff_use <- as.numeric(1)
+
+# Reduce to only unique columns of interest
+df_ff <- df_ff[,-2]
+
+# Merge into df_sr_wide
+df_sr_wide <- merge(x = df_sr_wide, y = df_ff, by = "teacher", all.x = TRUE)
+
+# Turn NAs into zeros
+df_sr_wide$ff_use[which(is.na(df_sr_wide$ff_use))] <- 0
 
 #####################
 # DATA PULL: add in year later account status & account type
@@ -1386,7 +1414,7 @@ print(round(query_runtime,1))
 # Change change "individual - synthetic" to "individual"
 df_as$accountType_1yr_later[which(df_as$accountType_1yr_later == "individual - synthetic")] <- "individual"
 
-#Merge 2019 account status & account type to df_sr_wide
+# Merge year-later account status & account type to df_sr_wide
 df_sr_wide <- merge(x = df_sr_wide, y = df_as, by = "teacher", all.x = TRUE)
 
 
