@@ -1229,6 +1229,10 @@ df_sr_wide$total_presentations <- summ2$num_presentations
 df_sr_wide$total_students <- summ5$total_students
 df_sr_wide$total_students_dup <- summ5$total_students_dup
 df_sr_wide$total_students_dup_prop <- df_sr_wide$total_students_dup/df_sr_wide$total_presentations
+df_sr_wide$total_engagements_per_student <- df_sr_wide$total_students_dup/df_sr_wide$total_students
+
+df_sr_wide$total_engagements_per_student[which(is.nan(df_sr_wide$total_engagements_per_student))] <- NA
+
 df_sr_wide$total_months_used <- summ3$total_months_used
 
 df_sr_wide$total_presentations[is.na(df_sr_wide$total_presentations)]<- 0
