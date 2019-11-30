@@ -946,7 +946,8 @@ for (k in 1:2) {
     DATE(sp.timestamp) AS Date,
     EXTRACT(HOUR FROM sp.timestamp) AS hour,
     COUNT(DISTINCT sp.presentation_id) as num_presentations,
-    COUNT(DISTINCT sr.student) as num_students
+    COUNT(DISTINCT sr.student) as num_students, 
+    COUNT(sr.student) as num_students_dup
     
     FROM 
     
@@ -1047,7 +1048,8 @@ for (k in 1:2) {
     DATE(sp.timestamp) AS Date,
     EXTRACT(HOUR FROM sp.timestamp) AS hour,
     COUNT(DISTINCT sp.presentation_id) as num_presentations,
-    COUNT(DISTINCT sr.student) as num_students
+    COUNT(DISTINCT sr.student) as num_students,
+    COUNT(sr.student) as num_students_dup
     
     FROM 
     
@@ -1207,7 +1209,7 @@ df_sr_wide <- df_sr_wide[,-which(colnames(df_sr_wide)=="NA")]
 
 # Create new col summing num_students: total_students
 entire_dfuf <- group_by(entire_dfuf, teacher)
-summ5  <- summarise(entire_dfuf, total_students = sum(num_students)) 
+summ5  <- summarise(entire_dfuf, total_students = sum(num_students), total_students_dup = sum(num_students_dup)) 
 entire_dfuf <- ungroup(entire_dfuf)
 
 # Create new col in df_sr_wide: total_presentations & total_months_used
@@ -1225,6 +1227,8 @@ df_sr_wide <- merge(x= df_uf, y=df_sr_wide, by = "teacher", all.x = TRUE)
 ### Add to df_sr_wide: # Presentations by user & Total Months by user
 df_sr_wide$total_presentations <- summ2$num_presentations
 df_sr_wide$total_students <- summ5$total_students
+df_sr_wide$total_students_dup <- summ5$total_students_dup
+df_sr_wide$total_students_dup_prop <- df_sr_wide$total_students_dup/df_sr_wide$total_presentations
 df_sr_wide$total_months_used <- summ3$total_months_used
 
 df_sr_wide$total_presentations[is.na(df_sr_wide$total_presentations)]<- 0
