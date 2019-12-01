@@ -1165,6 +1165,11 @@ df_sp$slide_type_amt_norm <- df_sp$slide_type_ct/df_sp$total_slides
 # Create df_sp_wide
 df_sp_wide <- dcast(df_sp, teacher + total_slides ~  slide_type, value.var = "slide_type_amt_norm")
 
+
+#####################
+# CREATE: subscription buckets
+#####################
+
 ### Generated "subscription status" field cleanup
 
 #collapse df_us to only have unique teachers (per row)
@@ -1192,37 +1197,44 @@ df_us <- subset(df_us, select = c("teacher","first_pres_after_trial_1","last_pre
 names(df_us)[names(df_us) == "first_pres_after_trial_1"] <- "first_pres_after_trial" 
 names(df_us)[names(df_us) == "last_pres_1st_few_mnths_1"] <- "last_pres_1st_few_mnths"
 
+# Turn blanks into NAs
+df_us$account_status_min <- na_if(df_us$account_status_min,"")
+df_us$account_status_max <- na_if(df_us$account_status_max,"")
 
-dfus_into_dfuf <- merge(x = df_uf, y = df_us, by = "teacher", all.x = TRUE)
+# Pull over relevant columns only
+#df_statuses <- df_us[ , c(which(colnames(df_us)=="teacher"), which(colnames(df_us)=="account_status_max"))]
+df_statuses <- df_us[ , c(1,5)]
 
-entire_dfuf <- merge(x = dfus_into_dfuf, y = df_sr, by = "teacher", all.x = TRUE)
+# Remove duplicates
+df_statuses <- unique(df_statuses)
+
+# Rename column
+colnames(df_statuses)[2] = "subscription"
+
+#####################
+# CREATE DFs: df_sr_wide
+#####################
 
 # Create summary: presentations by year/month
-entire_dfuf <- group_by(entire_dfuf, teacher, Date_year_month)
-summ  <- summarise(entire_dfuf, num_presentations = sum(num_presentations)) 
-entire_dfuf <- ungroup(entire_dfuf)
+df_sr <- group_by(df_sr, teacher, Date_year_month)
+summ  <- summarise(df_sr, num_presentations = sum(num_presentations)) 
+df_sr <- ungroup(df_sr)
 
 # Create wide df
 df_sr_wide <- dcast(summ, teacher ~ Date_year_month, value.var="num_presentations")
-# Remove the NA column (happens b/c some have NAs for all dates) 
-df_sr_wide <- df_sr_wide[,-which(colnames(df_sr_wide)=="NA")]
+# # Remove NA column (happens b/c some have NAs for all dates)
+# df_sr_wide <- df_sr_wide[,-which(colnames(df_sr_wide)=="NA")]
 
 # Create new col summing num_students: total_students
-entire_dfuf <- group_by(entire_dfuf, teacher)
-summ5  <- summarise(entire_dfuf, total_students = sum(num_students), total_students_dup = sum(num_students_dup)) 
-entire_dfuf <- ungroup(entire_dfuf)
+df_sr <- group_by(df_sr, teacher)
+summ5  <- summarise(df_sr, total_students = sum(num_students), total_students_dup = sum(num_students_dup)) 
+df_sr <- ungroup(df_sr)
 
 # Create new col in df_sr_wide: total_presentations & total_months_used
 summ <- group_by(summ, teacher)
 summ2 <- summarise(summ, num_presentations = sum(num_presentations))
 summ3 <- summarise(summ, total_months_used = sum(!is.na(Date_year_month)) )
 summ <- ungroup(summ)
-
-# Merge df_uf & df_sr_wide, with df_uf on left (to get new users from df_uf)
-df_sr_wide <- merge(x= df_uf, y=df_sr_wide, by = "teacher", all.x = TRUE)
-
-# Add columns from dfuf_into_dfsr on df_sr_wide
-#df_sr_wide <- merge(x= df_sr_wide, y = entire_dfuf, by = c("teacher","firstseen"), all.x = TRUE)
 
 ### Add to df_sr_wide: # Presentations by user & Total Months by user
 df_sr_wide$total_presentations <- summ2$num_presentations
@@ -1235,7 +1247,6 @@ df_sr_wide$total_engagements_per_student[which(is.nan(df_sr_wide$total_engagemen
 
 df_sr_wide$total_months_used <- summ3$total_months_used
 
-df_sr_wide$total_presentations[is.na(df_sr_wide$total_presentations)]<- 0
 df_sr$num_students[is.na(df_sr$num_students)] <- 0 
 
 ### Student Engagement
@@ -1294,34 +1305,51 @@ df_sr_wide$pres_usage_norm3 <- round(df_sr_wide$total_presentations/df_sr_wide$m
 # Remove unnecessary dfs
 rm(list = c("summ","summ2","summ3"))
 
-# Turn blanks into NAs
-entire_dfuf$account_status_min <- na_if(entire_dfuf$account_status_min,"")
-entire_dfuf$account_status_max <- na_if(entire_dfuf$account_status_max,"")
+#####################
+# MERGE: Pull in df_uf (captures people with no usage) & df_statuses
+#####################
 
-# Pull over two columns
-df_statuses <- entire_dfuf[ , c(which(colnames(entire_dfuf)=="teacher"), which(colnames(entire_dfuf)=="account_status_min"), which(colnames(entire_dfuf)=="account_status_max"))]
-
-# Remove duplicates
-df_statuses <- unique(df_statuses)
+# Merge df_uf & df_sr_wide, with df_uf on left (to get new users from df_uf)
+df_sr_wide <- merge(x= df_uf, y=df_sr_wide, by = "teacher", all.x = TRUE)
 
 # Merge df_statuses into df_sr_wide
 df_sr_wide <- merge(x = df_sr_wide, y = df_statuses, by = "teacher", all.x = TRUE)
 
+# Add columns from dfuf_into_dfsr on df_sr_wide
+#df_sr_wide <- merge(x= df_sr_wide, y = entire_dfuf, by = c("teacher","firstseen"), all.x = TRUE)
+
+df_sr_wide$total_presentations[is.na(df_sr_wide$total_presentations)]<- 0
+
+#####################
+# CREATE: usage buckets
+#####################
+
 # Create empty column
-df_sr_wide$status_label <- as.character("")
+df_sr_wide$usage_label <- as.character("")
 
 # Never used
-df_sr_wide$status_label[which( df_sr_wide$total_presentations == 0)] <- "Never Used"
+df_sr_wide$usage_label[which( df_sr_wide$total_presentations == 0)] <- "Never Used"
 # Tested Product Only
-df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students <= 1)] <- "Tested Product Only"
+df_sr_wide$usage_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students <= 1)] <- "Tested Product Only"
 # Presented to 2+ went free
-df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & df_sr_wide$account_status_max == "free")] <- "Used Product Free"
-# Presented to 2+ went premium
-df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & df_sr_wide$account_status_max == "premium")] <- "Used Product Premium"
-# Presented to 2+ went premiumtrial
-df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & df_sr_wide$account_status_max == "premiumTrial")] <- "Used Product PremiumTrial"
-# Presented to 2+ but status unknown (i.e. they used the product in the 1st month but not the subsequent months in the time span)
-df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & is.na(df_sr_wide$account_status_max) == TRUE)] <- "Used Product Unknown Status"
+df_sr_wide$usage_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1)] <- "Used Product"
+
+#### CODE WAS USED WHEN SUBSCRIPTION STATUS & USAGE STATUS WERE COMBINED.
+# # Create empty column
+# df_sr_wide$status_label <- as.character("")
+# 
+# # Never used
+# df_sr_wide$status_label[which( df_sr_wide$total_presentations == 0)] <- "Never Used"
+# # Tested Product Only
+# df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students <= 1)] <- "Tested Product Only"
+# # Presented to 2+ went free
+# df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & df_sr_wide$account_status_max == "free")] <- "Used Product Free"
+# # Presented to 2+ went premium
+# df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & df_sr_wide$account_status_max == "premium")] <- "Used Product Premium"
+# # Presented to 2+ went premiumtrial
+# df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & df_sr_wide$account_status_max == "premiumTrial")] <- "Used Product PremiumTrial"
+# # Presented to 2+ but status unknown (i.e. they used the product in the 1st month but not the subsequent months in the time span)
+# df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & is.na(df_sr_wide$account_status_max) == TRUE)] <- "Used Product Unknown Status"
 
 #####################
 # ADD: slide diversity to df_sr_wide
@@ -1417,6 +1445,35 @@ df_as$accountType_1yr_later[which(df_as$accountType_1yr_later == "individual - s
 # Merge year-later account status & account type to df_sr_wide
 df_sr_wide <- merge(x = df_sr_wide, y = df_as, by = "teacher", all.x = TRUE)
 
+#####################
+# CREATE: num_prez_audience & num_prez_testing
+#####################
+
+# Create new columns: num_prez_audience & num_prez_testing
+df_sr_wide$num_prez_audience <- df_sr_wide$total_presentations-(df_sr_wide$total_presentations*df_sr_wide$Num_stu_Testing)
+df_sr_wide$num_prez_testing <- df_sr_wide$total_presentations*df_sr_wide$Num_stu_Testing
+
+# Turn blanks from num_prez_audience & num_prez_testing to zeros
+df_sr_wide$num_prez_audience[which(is.na(df_sr_wide$num_prez_audience))] <- 0
+df_sr_wide$num_prez_testing[which(is.na(df_sr_wide$num_prez_testing))] <- 0
+
+#####################
+# CREATE: total_prez_label
+#####################
+
+### Create column: total_prez_label
+# Initialize column
+df_sr_wide$total_prez_label <- as.character(NA)
+# Add labels
+df_sr_wide$total_prez_label[which(df_sr_wide$total_presentations == 0)] <- "0_None"
+df_sr_wide$total_prez_label[which(df_sr_wide$total_presentations > 0 & df_sr_wide$total_presentation <= 9)] <- "1_Light"
+df_sr_wide$total_prez_label[which(df_sr_wide$total_presentations >=10 & df_sr_wide$total_presentations <= 19)] <- "2_Medium"
+df_sr_wide$total_prez_label[which(df_sr_wide$total_presentations >=20 & df_sr_wide$total_presentations <= 34)] <- "3_Heavy"
+df_sr_wide$total_prez_label[which(df_sr_wide$total_presentations >= 35)] <- "4_Superuser"
+# Rename the levels (note: did it this way to preserve the desired order)
+df_sr_wide$total_prez_label <- factor(df_sr_wide$total_prez_label)
+levels(df_sr_wide$total_prez_label) <- substr(levels(df_sr_wide$total_prez_label), 3, nchar(levels(df_sr_wide$total_prez_label)))
+
 
 ##############################################################################
 # Integrate initial months with 1 year later
@@ -1430,20 +1487,23 @@ df_sr_wide <- merge(x = df_sr_wide, y = df_as, by = "teacher", all.x = TRUE)
   
   if (k == 2) {
     
-    # When status unknown, use user facts status
-    df_sr_wide$status_label[which( df_sr_wide$status_label == "Used Product Unknown Status")] <- df_sr_wide$accountStatus_1yr_later[which( df_sr_wide$status_label == "Used Product Unknown Status")]
-    df_sr_wide$status_label[which( df_sr_wide$status_label == "free")] <- "Used Product Free"
-    df_sr_wide$status_label[which( df_sr_wide$status_label == "premium")] <- "Used Product Premium"
-    df_sr_wide$status_label[which( df_sr_wide$status_label == "premiumtrial")] <- "Used Product PremiumTrial"
+    # # When status unknown for year later, use user facts status
+    # df_sr_wide$subscription[which( df_sr_wide$subscription == "Unknown")] <- df_sr_wide$accountStatus_1yr_later[which( df_sr_wide$subscription == "Unknown")]
+
+    # # Clean up status labels
+    # df_sr_wide$status_label[which( df_sr_wide$status_label == "free")] <- "Used Product Free"
+    # df_sr_wide$status_label[which( df_sr_wide$status_label == "premium")] <- "Used Product Premium"
+    # df_sr_wide$status_label[which( df_sr_wide$status_label == "premiumtrial")] <- "Used Product PremiumTrial"
     
     # Integrate initial months and year later DFs into one
-    df_sr_wide_INITIAL$status_label_yr_later <- df_sr_wide$status_label
+    df_sr_wide_INITIAL$usage_label_yr_later <- df_sr_wide$usage_label
+    df_sr_wide_INITIAL$subscription_yr_later <- df_sr_wide$subscription
     df_sr_wide_INITIAL$total_presentations_yr_later <- df_sr_wide$total_presentations
     df_sr_wide_INITIAL$one_plus_prez_initial <- ifelse(df_sr_wide_INITIAL$total_presentations > 0, 1, 0)
     df_wide <- df_sr_wide_INITIAL[,-c(which(colnames(df_sr_wide_INITIAL)=="accountStatus_1yr_later"), 
-                                      which(colnames(df_sr_wide_INITIAL)=="account_status_min"), 
-                                      which(colnames(df_sr_wide_INITIAL)=="account_status_max"))]
-    names(df_wide)[names(df_wide) == "status_label"] <- "status_label_initial_months"
+                                      which(colnames(df_sr_wide_INITIAL)=="account_status_min"))]
+    names(df_wide)[names(df_wide) == "usage_label"] <- "usage_label_initial_months"
+    names(df_wide)[names(df_wide) == "subscription"] <- "subscription_initial_months"
     
   }
 
@@ -1454,25 +1514,11 @@ df_sr_wide <- merge(x = df_sr_wide, y = df_as, by = "teacher", all.x = TRUE)
 df_wide$total_students[which(is.na(df_wide$total_students))] <- 0
 #df_wide$slideDiversity[which(is.na(df_wide$slideDiversity))] <- 0 # Might not want to do this -- 0 means low slide diversity, but NA is actually the absence of values. 
 
-# Create new columns: num_prez_audience & num_prez_testing
-df_wide$num_prez_audience <- df_wide$total_presentations-(df_wide$total_presentations*df_wide$Num_stu_Testing)
-df_wide$num_prez_testing <- df_wide$total_presentations*df_wide$Num_stu_Testing
 
-# Turn blanks from num_prez_audience & num_prez_testing to zeros
-df_wide$num_prez_audience[which(is.na(df_wide$num_prez_audience))] <- 0
-df_wide$num_prez_testing[which(is.na(df_wide$num_prez_testing))] <- 0
 
-### Create column: total_prez_label
-# Initialize column
-df_wide$total_prez_label <- as.character(NA)
-# Add labels
-df_wide$total_prez_label[which(df_wide$total_presentations <= 9)] <- "1_Light"
-df_wide$total_prez_label[which(df_wide$total_presentations >=10 & df_wide$total_presentations <= 19)] <- "2_Medium"
-df_wide$total_prez_label[which(df_wide$total_presentations >=20 & df_wide$total_presentations <= 34)] <- "3_Heavy"
-df_wide$total_prez_label[which(df_wide$total_presentations >= 35)] <- "4_Superuser"
-# Rename the levels (note: did it this way to preserve the desired order)
-df_wide$total_prez_label <- factor(df_wide$total_prez_label)
-levels(df_wide$total_prez_label) <- substr(levels(df_wide$total_prez_label), 3, nchar(levels(df_wide$total_prez_label)))
+#####################
+# MERGE: add in participated_b4_used & app_events data (from initial months)
+#####################
 
 # Merge in participated in presentation before presented
 df_wide <- merge(x = df_wide, y = df_ppb4, by = "teacher", all.x = TRUE)
@@ -1487,17 +1533,7 @@ df_wide$participated_b4_used[which(is.na(df_wide$participated_b4_used))] <- 0
 # Merge in AE data
 df_wide <- merge(x = df_wide, y = df_ae, by = "teacher", all.x = TRUE)
 
-##############################################################################
-# REMOVE: Never Used, Tested Only & Used Product Unknown Status
-##############################################################################
 
-df_wide2 <- df_wide[-which(df_wide$status_label_initial_months == "Never Used" | df_wide$status_label_initial_months == "Tested Product Only" | df_wide$status_label_initial_months == "Used Product Unknown Status"), ]
-
-##############################################################################
-# EXPLORE: 2019 PremiumTrial Statuses
-##############################################################################
-
-df_wide2_PremTri <- df_wide2[which(df_wide2$status_label_yr_later == "Used Product PremiumTrial"), ]
 
 ##############################################################################
 # Explore Distributions
@@ -1523,11 +1559,11 @@ plot_bar <- function(dfx, xaxistitle, title, w = 15, h = 7, bw=0, xcart = 0)
   }
 
 
-# Bar plot: status_label_initial_months
-plot_bar(dfx=df_wide$status_label_initial_months, xaxistitle="Statuses", title="Total Users by Statuses (Initial Months)")
+# Bar plot: usage_label_initial_months
+plot_bar(dfx=df_wide$usage_label_initial_months, xaxistitle="Statuses", title="Total Users by Statuses (Initial Months)")
 
-# Bar Plot: status_label_yr_later
-plot_bar(dfx=df_wide$status_label_yr_later, xaxistitle="Statuses", title="Total Users by Statuses (Year Later)")
+# Bar Plot: usage_label_yr_later
+plot_bar(dfx=df_wide$usage_label_yr_later, xaxistitle="Statuses", title="Total Users by Statuses (Year Later)")
 
 # Histogram plot: # of presentations for an audience
 p <- qplot(df_wide2$num_prez_audience, geom="histogram", binwidth = 5) +
@@ -1558,7 +1594,7 @@ ggsave(filename = "Presentations Given to Audience (Zoomed In).png", plot = p, w
 #######################################
 
 # Create proportional, facetted plotting function
-prop_plot <- function(df = df_wide2, x, facet = df_wide2$status_label_yr_later, xaxistitle, title, legendtitle = "Status", w = 15, h = 7) #, zoomY=0
+prop_plot <- function(df = df_wide2, x, facet = df_wide2$usage_label_yr_later, xaxistitle, title, legendtitle = "Status", w = 15, h = 7) #, zoomY=0
 {
   #if(zoomY != 0) title = paste(title,"(zoomed in)")
   
@@ -1610,7 +1646,7 @@ prop_plot(x = df_wide2$num_prez_audience, xaxistitle = "Number of Presentations 
 
 ########### plot testing !!!!!!!!!!!!!!
 
-ggplot(data=df_wide2, aes(x=total_presentations_yr_later, y=slideDiversity, colour=status_label_yr_later)) + #, group=supp, colour=supp
+ggplot(data=df_wide2, aes(x=total_presentations_yr_later, y=slideDiversity, colour=usage_label_yr_later)) + #, group=supp, colour=supp
   #geom_line() +
   geom_point()
 
