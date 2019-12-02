@@ -1390,7 +1390,8 @@ SELECT CAST(externalid as STRING) as teacher, COUNT(externalid) as num_flash_use
 FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` sr_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf_i 
 ON sr_i.teacher = uf_i.externalid
 WHERE app like '%flash%' AND ((DATE(timestamp) BETWEEN DATE(FirstSeen) AND DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH))) 
-AND (DATE(FirstSeen) ", firstSeen, ")
+AND (DATE(FirstSeen) ", firstSeen, ") 
+AND profile_role <> 'student'
 GROUP BY CAST(externalid as STRING)
 "
 )
@@ -1451,7 +1452,7 @@ df_sr_wide <- merge(x = df_sr_wide, y = df_as, by = "teacher", all.x = TRUE)
 
 # Create new columns: num_prez_audience & num_prez_testing
 df_sr_wide$num_prez_audience <- df_sr_wide$total_presentations-(df_sr_wide$total_presentations*df_sr_wide$Num_stu_Testing)
-df_sr_wide$num_prez_testing <- df_sr_wide$total_presentations*df_sr_wide$Num_stu_Testing
+df_sr_wide$num_prez_testing <- dtotal_months_usedf_sr_wide$total_presentations*df_sr_wide$Num_stu_Testing
 
 # Turn blanks from num_prez_audience & num_prez_testing to zeros
 df_sr_wide$num_prez_audience[which(is.na(df_sr_wide$num_prez_audience))] <- 0
@@ -1487,23 +1488,32 @@ levels(df_sr_wide$total_prez_label) <- substr(levels(df_sr_wide$total_prez_label
   
   if (k == 2) {
     
-    # # When status unknown for year later, use user facts status
-    # df_sr_wide$subscription[which( df_sr_wide$subscription == "Unknown")] <- df_sr_wide$accountStatus_1yr_later[which( df_sr_wide$subscription == "Unknown")]
-
-    # # Clean up status labels
-    # df_sr_wide$status_label[which( df_sr_wide$status_label == "free")] <- "Used Product Free"
-    # df_sr_wide$status_label[which( df_sr_wide$status_label == "premium")] <- "Used Product Premium"
-    # df_sr_wide$status_label[which( df_sr_wide$status_label == "premiumtrial")] <- "Used Product PremiumTrial"
+    # When status unknown for year later, use user facts status
+    df_sr_wide$subscription[which(is.na(df_sr_wide$subscription) == TRUE)] <- df_sr_wide$accountStatus_1yr_later[which(is.na(df_sr_wide$subscription) == TRUE)]
     
-    # Integrate initial months and year later DFs into one
+    # Create binary variable from Year Later data
+    df_sr_wide$dep_prez_usage_yr_later <- ifelse((df_sr_wide$total_presentations > 0 & df_sr_wide$usage_label != "Tested Product Only"), 1, 0)
+    
+    # Pull year later fields into Initial DF
     df_sr_wide_INITIAL$usage_label_yr_later <- df_sr_wide$usage_label
     df_sr_wide_INITIAL$subscription_yr_later <- df_sr_wide$subscription
-    df_sr_wide_INITIAL$total_presentations_yr_later <- df_sr_wide$total_presentations
-    df_sr_wide_INITIAL$one_plus_prez_initial <- ifelse(df_sr_wide_INITIAL$total_presentations > 0, 1, 0)
+    df_sr_wide_INITIAL$dep_total_presentations_yr_later <- df_sr_wide$total_presentations
+    df_sr_wide_INITIAL$dep_prez_usage_yr_later <- df_sr_wide$dep_prez_usage_yr_later
+    
+    # Create binary variable on INITIAL set
+    df_sr_wide_INITIAL$prez_usage_initial <- ifelse((df_sr_wide_INITIAL$total_presentations > 0 & df_sr_wide_INITIAL$usage_label != "Tested Product Only"), 1, 0)
+    
+    # Create df_wide (removing irrelevant columns) from Initial DF
     df_wide <- df_sr_wide_INITIAL[,-c(which(colnames(df_sr_wide_INITIAL)=="accountStatus_1yr_later"), 
                                       which(colnames(df_sr_wide_INITIAL)=="account_status_min"))]
+    # Rename columns for clarity
     names(df_wide)[names(df_wide) == "usage_label"] <- "usage_label_initial_months"
     names(df_wide)[names(df_wide) == "subscription"] <- "subscription_initial_months"
+    
+    # Create binary dependent variables: Subscription Status
+    df_wide$dep_premium <- ifelse(df_wide$subscription_yr_later == "premium", 1, 0)
+    df_wide$dep_premiumtrial <- ifelse(df_wide$subscription_yr_later == "premiumTrial", 1, 0)
+    df_wide$dep_free <- ifelse(df_wide$subscription_yr_later == "free", 1, 0)
     
   }
 
