@@ -1253,11 +1253,10 @@ df_sr$num_students[is.na(df_sr$num_students)] <- 0
 
 # Create bucket labels for num_students
 df_sr$num_students_label <- df_sr$num_students
-df_sr$num_students_label[which(df_sr$num_students == 0)] <- "0_Testing"
-df_sr$num_students_label[which(df_sr$num_students == 1)] <- "1_Low"
-df_sr$num_students_label[which(df_sr$num_students >= 2 & df_sr$num_students <= 10)] <- "2_Low-Medium"
-df_sr$num_students_label[which(df_sr$num_students >= 11 & df_sr$num_students <= 19)] <- "3_Medium"
-df_sr$num_students_label[which(df_sr$num_students >= 20 & df_sr$num_students <= 30)] <- "4_Medium-High"
+df_sr$num_students_label[which(df_sr$num_students <= 1)] <- "0_Testing"
+df_sr$num_students_label[which(df_sr$num_students >= 2 & df_sr$num_students <= 10)] <- "1_Low"
+df_sr$num_students_label[which(df_sr$num_students >= 11 & df_sr$num_students <= 19)] <- "2_Low-Medium"
+df_sr$num_students_label[which(df_sr$num_students >= 20 & df_sr$num_students <= 30)] <- "3_Medium"
 df_sr$num_students_label[which(df_sr$num_students >= 31)] <- "5_High"
 
 # Rename the levels (note: did it this way to preserve the desired order)
