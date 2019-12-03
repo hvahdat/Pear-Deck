@@ -1451,7 +1451,7 @@ df_sr_wide <- merge(x = df_sr_wide, y = df_as, by = "teacher", all.x = TRUE)
 
 # Create new columns: num_prez_audience & num_prez_testing
 df_sr_wide$num_prez_audience <- df_sr_wide$total_presentations-(df_sr_wide$total_presentations*df_sr_wide$Num_stu_Testing)
-df_sr_wide$num_prez_testing <- dtotal_months_usedf_sr_wide$total_presentations*df_sr_wide$Num_stu_Testing
+df_sr_wide$num_prez_testing <- df_sr_wide$total_presentations*df_sr_wide$Num_stu_Testing
 
 # Turn blanks from num_prez_audience & num_prez_testing to zeros
 df_sr_wide$num_prez_audience[which(is.na(df_sr_wide$num_prez_audience))] <- 0
