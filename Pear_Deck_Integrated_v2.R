@@ -1471,7 +1471,7 @@ for (k in 1:2) {
   df_sr_wide$total_prez_aud_label <- as.character(NA)
   # Add labels
   df_sr_wide$total_prez_aud_label[which(df_sr_wide$num_prez_audience == 0)] <- "0_None"
-  df_sr_wide$total_prez_aud_label[which(df_sr_wide$num_prez_audience > 0 & df_sr_wide$total_presentation <= 9)] <- "1_Light"
+  df_sr_wide$total_prez_aud_label[which(df_sr_wide$num_prez_audience > 0 & df_sr_wide$num_prez_audience <= 9)] <- "1_Light"
   df_sr_wide$total_prez_aud_label[which(df_sr_wide$num_prez_audience >=10 & df_sr_wide$num_prez_audience <= 19)] <- "2_Medium"
   df_sr_wide$total_prez_aud_label[which(df_sr_wide$num_prez_audience >=20 & df_sr_wide$num_prez_audience <= 34)] <- "3_Heavy"
   df_sr_wide$total_prez_aud_label[which(df_sr_wide$num_prez_audience >= 35)] <- "4_Superuser"
