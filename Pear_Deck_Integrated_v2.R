@@ -10,6 +10,8 @@ code_start_time <- Sys.time()
 
 # Install packages (if needed)
 #install.packages("zoo")
+#install.packages("fastDummies")
+#install.packages("xlsx")
 
 # Load libraries
 library(bigrquery)
@@ -20,6 +22,8 @@ library(tidyr)
 library(scales)
 library(zoo)
 library(data.table)
+library(fastDummies)
+library(xlsx)
 
 # Set working directory
 setwd("C:\\Users\\katie\\Dropbox\\Grad School - Business Analytics Masters Program\\2019 Fall Classes\\Pear Deck - Analytics Experience\\R Scripts")
@@ -1246,10 +1250,13 @@ for (k in 1:2) {
   df_sr_wide$total_students_dup_prop <- df_sr_wide$total_students_dup/df_sr_wide$total_presentations
   df_sr_wide$total_engagements_per_student <- df_sr_wide$total_students_dup/df_sr_wide$total_students
   
-  df_sr_wide$total_engagements_per_student[which(is.nan(df_sr_wide$total_engagements_per_student))] <- NA
+  # Turn NAN to zero (can't have missing data)
+  df_sr_wide$total_engagements_per_student[which(is.nan(df_sr_wide$total_engagements_per_student))] <- 0
   
+  # Pull total_months_used column over to df_sr_wide
   df_sr_wide$total_months_used <- summ3$total_months_used
   
+  # Turn NAs to zeros
   df_sr$num_students[is.na(df_sr$num_students)] <- 0 
   
   ### Student Engagement
@@ -1665,6 +1672,69 @@ ggplot(data=df_wide2, aes(x=total_presentations_yr_later, y=slideDiversity, colo
   geom_point()
 
 ggplot(data=df_wide2, aes(x=total_presentations_yr_later, y=slideDiversity)) + geom_point()
+
+
+##############################################################################
+# EXAMINE CORRELATION MATRIX
+##############################################################################
+
+# Review for multicollinearity
+
+# Subset data (remove "Never Used" during intial months)
+df_wide2 <- df_wide[-which(df_wide$usage_label_initial_months == "Never Used"),]
+
+# Create indicator variables
+test_dummies <- dummy_cols(df_wide2)
+# Remove original categorical variables
+df_corr <- test_dummies[,-c(9,12)]
+
+# Generate correlation data
+df_corr <- data.frame(cor(df_corr, method = c("pearson", "kendall", "spearman")))
+
+# Export to Excel file
+write.xlsx(df_corr, "correlations.xlsx")
+
+##############################################################################
+# Model Work
+##############################################################################
+
+###############################
+# SUBSET DATA
+###############################
+
+# Remove columns of disinterest to all models
+df_wide2 <- df_wide2[,-c(1:6,8:10, 12, 19:27, 31:33, 35:36, 49)]
+
+# Set model number (see models_list for key)
+i = 1
+
+# Set models_list
+models_list = list("prez_usage_binary", "total_prez_cont", "sub_status_free_binary", "sub_status_premium_binary", "sub_status_premiumtrial_binary", "clustering")
+
+if(i == 1 | i == 3 | i == 4 | i == 5) {
+  
+  # Remove users who Never Used (initial months) or Tested Product Only (initial months) 
+  df_wide2 <- df_wide[-which(df_wide$usage_label_initial_months == "Never Used" | df_wide$usage_label_initial_months == "Tested Product Only"),]
+  
+}
+
+if(i == 6) {
+  
+  # Remove users who Never Used (initial months) 
+  df_wide2 <- df_wide[-which(df_wide$usage_label_initial_months == "Never Used"),]
+  
+}
+
+if(i == 2) {
+  
+  # Remove users who Never Used (initial months) or Tested Product Only (year later)
+  df_wide2 <- df_wide[-which(df_wide$usage_label_initial_months == "Never Used" | df_wide$usage_label_yr_later == "Tested Product Only"),]
+  
+}
+
+
+
+
 
 ##############################################################################
 # Analysis
