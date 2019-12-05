@@ -1703,7 +1703,7 @@ write.xlsx(df_corr, "correlations.xlsx")
 ###############################
 
 # Remove columns of disinterest to all models
-df_wide2 <- df_wide2[,-c(1:6,8:10, 12, 19:27, 31:33, 35:36, 49)]
+df_wide2 <- df_wide2[,-c(1:6,8:10, 12, 18:27, 31:33, 35:36, 49)]
 
 # Set model number (see models_list for key)
 i = 1
@@ -1734,7 +1734,7 @@ if(i == 2) {
 
 
 
-
+# Last code update: 12/4/19
 
 ##############################################################################
 # Analysis
