@@ -1554,7 +1554,7 @@ df_wide$participated_b4_used[which(is.na(df_wide$participated_b4_used))] <- 0
 # Merge in AE data
 df_wide <- merge(x = df_wide, y = df_ae, by = "teacher", all.x = TRUE)
 
-
+df_wide2 <- df_wide
 
 ##############################################################################
 # Explore Distributions
@@ -1567,7 +1567,7 @@ df_wide <- merge(x = df_wide, y = df_ae, by = "teacher", all.x = TRUE)
 # Create bar/histogram plotting function
 plot_bar <- function(dfx, xaxistitle, title, w = 15, h = 7, bw=0, xcart = 0) 
 {
-  p <- qplot(dfx, geom=geomtype, stat="count") + 
+  p <- qplot(dfx, geom="bar", stat="count") + 
     scale_y_continuous(name = "Count", labels = scales::comma) +  # unit_format(unit = "K") +
     scale_x_discrete(name=xaxistitle) +
     coord_cartesian(xlim = c(0, xcart)) +
@@ -1609,10 +1609,12 @@ p <- qplot(df_wide2$num_prez_audience, geom="histogram", binwidth = 1) +
 
 ggsave(filename = "Presentations Given to Audience (Zoomed In).png", plot = p, width = 15, height = 7, units = "in")
 
-
 #######################################
 # Independent Variables viewed proportionally against Dependent Variable
 #######################################
+
+# Create a DF for exploration (removes rows with initial usage labels: Never Used & Tested Product Only)
+df_wide2 <- df_wide[-which(df_wide$usage_label_initial_months == "Never Used" | df_wide$usage_label_initial_months == "Tested Product Only"), ]
 
 # Create proportional, facetted plotting function
 prop_plot <- function(df = df_wide2, x, facet = df_wide2$usage_label_yr_later, xaxistitle, title, legendtitle = "Status", w = 15, h = 7) #, zoomY=0
@@ -1660,33 +1662,57 @@ prop_plot <- function(df = df_wide2, x, facet = df_wide2$usage_label_yr_later, x
 
 prop_plot(x = df_wide2$total_presentations, xaxistitle = "Total Presentations", title = "Total Presentations by User")
 prop_plot(x = df_wide2$total_students, xaxistitle = "Total Students", title = "Total Students Presented to by User")
-prop_plot(x = df_wide2$total_months_used, xaxistitle = "Number of Months Used", title = "Total Months Used by User")
+#prop_plot(x = df_wide2$total_months_used, xaxistitle = "Number of Months Used", title = "Total Months Used by User")
 prop_plot(x = df_wide2$num_prez_audience, xaxistitle = "Number of Presentations to an Audience", title = "Total Presentations to an Audience")
 prop_plot(x = df_wide2$num_prez_testing, xaxistitle = "Presentation Tests", title = "Total Presentations launched Testing Product")
 prop_plot(x = df_wide2$num_prez_audience, xaxistitle = "Number of Presentations Given to an Audience", title = "Presentations Given to Audience")
 
-########### plot testing !!!!!!!!!!!!!!
-
-ggplot(data=df_wide2, aes(x=total_presentations_yr_later, y=slideDiversity, colour=usage_label_yr_later)) + #, group=supp, colour=supp
+ggplot(data=df_wide2, aes(x=dep_total_presentations_yr_later, y=slideDiversity, colour=usage_label_yr_later)) + #, group=supp, colour=supp
   #geom_line() +
   geom_point()
 
-ggplot(data=df_wide2, aes(x=total_presentations_yr_later, y=slideDiversity)) + geom_point()
+ggplot(data=df_wide2, aes(x=dep_total_presentations_yr_later, y=slideDiversity)) + geom_point()
 
 
 ##############################################################################
-# EXAMINE CORRELATION MATRIX
+# Model Work
 ##############################################################################
+
+###########################################
+# EXAMINE CORRELATION MATRIX for all relevant variables
+###########################################
 
 # Review for multicollinearity
 
-# Subset data (remove "Never Used" during intial months)
-df_wide2 <- df_wide[-which(df_wide$usage_label_initial_months == "Never Used"),]
+################
+# SUBSET DATA: for correlation review
+################
+
+# SUBSET DATA: remove columns of disinterest to all models
+df_wide2 <- df_wide[,-c(1:6,8:10, 12, 18:27, 31:33, 35:36, 49)]
+
+# SUBSET DATA: (remove "Never Used" during intial months)
+df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Never Used"),]
+
+################
+# PREP DATA
+################
+
+
+# Examine missing data 
+sum(is.na(df_wide2))
+
+# Remove rows with missing data
+df_wide2 <- na.omit(df_wide2)
 
 # Create indicator variables
 test_dummies <- dummy_cols(df_wide2)
 # Remove original categorical variables
-df_corr <- test_dummies[,-c(9,12)]
+df_corr <- test_dummies[,-c(which(colnames(test_dummies)=="usage_label_initial_months" | colnames(test_dummies)=="total_prez_aud_label"))]
+
+################
+# GENERATE CORRELATION MATRIX
+################
 
 # Generate correlation data
 df_corr <- data.frame(cor(df_corr, method = c("pearson", "kendall", "spearman")))
@@ -1694,16 +1720,12 @@ df_corr <- data.frame(cor(df_corr, method = c("pearson", "kendall", "spearman"))
 # Export to Excel file
 write.xlsx(df_corr, "correlations.xlsx")
 
-##############################################################################
-# Model Work
-##############################################################################
+###########################################
+# SUBSET DATA: Model Specific
+###########################################
 
-###############################
-# SUBSET DATA
-###############################
-
-# Remove columns of disinterest to all models
-df_wide2 <- df_wide2[,-c(1:6,8:10, 12, 18:27, 31:33, 35:36, 49)]
+# Remove columns of disinterest to all models (start fresh with df_wide again)
+df_wide2 <- df_wide[,-c(1:6,8:10, 12, 18:27, 31:33, 35:36, 49)]
 
 # Set model number (see models_list for key)
 i = 1
@@ -1714,27 +1736,27 @@ models_list = list("prez_usage_binary", "total_prez_cont", "sub_status_free_bina
 if(i == 1 | i == 3 | i == 4 | i == 5) {
   
   # Remove users who Never Used (initial months) or Tested Product Only (initial months) 
-  df_wide2 <- df_wide[-which(df_wide$usage_label_initial_months == "Never Used" | df_wide$usage_label_initial_months == "Tested Product Only"),]
+  df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Never Used" | df_wide2$usage_label_initial_months == "Tested Product Only"),]
   
 }
 
 if(i == 6) {
   
   # Remove users who Never Used (initial months) 
-  df_wide2 <- df_wide[-which(df_wide$usage_label_initial_months == "Never Used"),]
+  df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Never Used"),]
   
 }
 
 if(i == 2) {
   
   # Remove users who Never Used (initial months) or Tested Product Only (year later)
-  df_wide2 <- df_wide[-which(df_wide$usage_label_initial_months == "Never Used" | df_wide$usage_label_yr_later == "Tested Product Only"),]
+  df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Never Used" | df_wide2$usage_label_yr_later == "Tested Product Only"),]
   
 }
 
 
 
-# Last code update: 12/4/19
+# Last code update: 12/5/19
 
 ##############################################################################
 # Analysis
