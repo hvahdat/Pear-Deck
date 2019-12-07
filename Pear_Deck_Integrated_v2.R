@@ -12,6 +12,8 @@ code_start_time <- Sys.time()
 #install.packages("zoo")
 #install.packages("fastDummies")
 #install.packages("xlsx")
+#install.packages("rlang")
+#install.packages("scales")
 
 # Load libraries
 library(bigrquery)
@@ -49,6 +51,11 @@ firstSeen <- "BETWEEN '2018-08-05' AND '2018-08-18'"
 # install.packages("bigrquery")
 # install.packages("DescTools")
 
+#####################
+# DATA PULL: Users to exclude (coaches & inspearational teachers)
+#####################
+
+df_coach_insp <- read.xlsx("coaches_inspirational_hashed_IDs_v2.xlsx", 1, colClasses="character", stringsAsFactors=FALSE)
 
 #####################
 # DATA PULL: Teachers who participated in a presentation before ever presenting
@@ -1167,7 +1174,7 @@ for (k in 1:2) {
   df_sp$slide_type_amt_norm <- df_sp$slide_type_ct/df_sp$total_slides
   
   # Create df_sp_wide
-  df_sp_wide <- dcast(df_sp, teacher + total_slides ~  slide_type, value.var = "slide_type_amt_norm")
+  df_sp_wide <- reshape2::dcast(df_sp, teacher + total_slides ~  slide_type, value.var = "slide_type_amt_norm")
   
   
   #####################
@@ -1180,9 +1187,9 @@ for (k in 1:2) {
   df_us$timestamp <- NULL
   
   #do this to merge teachers into one row
-  df_us <- dcast(setDT(df_us), teacher ~ rowid(teacher), value.var = c("first_pres_after_trial",
-                                                                       "last_pres_1st_few_mnths",
-                                                                       "account_status_min",
+  df_us <- dcast(setDT(df_us), teacher ~ rowid(teacher), value.var = c("first_pres_after_trial", 
+                                                                       "last_pres_1st_few_mnths", 
+                                                                       "account_status_min", 
                                                                        "account_status_max"))
   
   # Merge 2 columns into one, since min and max often fill in either column 1 or 2
@@ -1228,7 +1235,7 @@ for (k in 1:2) {
   df_sr <- ungroup(df_sr)
   
   # Create wide df
-  df_sr_wide <- dcast(summ, teacher ~ Date_year_month, value.var="num_presentations")
+  df_sr_wide <- reshape2::dcast(summ, teacher ~ Date_year_month, value.var="num_presentations")
   # # Remove NA column (happens b/c some have NAs for all dates)
   # df_sr_wide <- df_sr_wide[,-which(colnames(df_sr_wide)=="NA")]
   
@@ -1282,7 +1289,7 @@ for (k in 1:2) {
   # Calculate normalized num_students_label
   summ$prop_stu_norm <- summ$num_students_label_ct/summ$total_presentations
   # Make it wide (merge prep)
-  summ2 <- dcast(summ, teacher ~ num_students_label, value.var="prop_stu_norm")
+  summ2 <- reshape2::dcast(summ, teacher ~ num_students_label, value.var="prop_stu_norm")
   summ2[is.na(summ2)] <- 0 
   # Create
   summ2$prop_stu_valid_prez <- (1 - summ2$prop_stu_Testing)
@@ -1694,10 +1701,13 @@ df_wide2 <- df_wide[,-c(1:6,8:10, 12, 18:27, 31:33, 35:36, 49)]
 # SUBSET DATA: (remove "Never Used" during intial months)
 df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Never Used"),]
 
+# SUBSET DATA: remove coaches and inspearational teachers
+#BigDF[ !(BigDF$ID %in% SmallDF$ID), ]
+df_wide2 <- df_wide2[ !(df_wide2$teacher %in% df_coach_insp$hashed_coach_id), ]
+
 ################
 # PREP DATA
 ################
-
 
 # Examine missing data 
 sum(is.na(df_wide2))
@@ -1720,8 +1730,9 @@ df_corr <- data.frame(cor(df_corr, method = c("pearson", "kendall", "spearman"))
 # Export to Excel file
 write.xlsx(df_corr, "correlations.xlsx")
 
+
 ###########################################
-# SUBSET DATA: Model Specific
+# SUBSET/PREP DATA: Model Specific
 ###########################################
 
 ################
@@ -1729,38 +1740,41 @@ write.xlsx(df_corr, "correlations.xlsx")
 ################
 
 # Remove columns of disinterest to all models (start fresh with df_wide again)
-df_wide2 <- df_wide[,-c(1:6,8:10, 12, 18:27, 31:33, 35:36, 49)]
+df_wide2 <- df_wide[,-c(1:6,8:10, 12, 18:27, 31:33, 36, 49)] # Note: one more removed later
 
 ################
 # SUBSET: Rows (model specific)
 ################
 
 # Set model number (see models_list for key)
-i = 1
+model_num = 5
 
 # Set models_list
 models_list = list("prez_usage_binary", "total_prez_cont", "sub_status_free_binary", "sub_status_premium_binary", "sub_status_premiumtrial_binary", "clustering")
 
-if(i == 1 | i == 3 | i == 4 | i == 5) {
+if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   
   # Remove users who Never Used (initial months) or Tested Product Only (initial months) 
   df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Never Used" | df_wide2$usage_label_initial_months == "Tested Product Only"),]
   
-}
-
-if(i == 6) {
+} else if (model_num == 6) {
   
   # Remove users who Never Used (initial months) 
   df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Never Used"),]
   
-}
-
-if(i == 2) {
+} else if(model_num == 2) {
   
   # Remove users who Never Used (initial months) or Tested Product Only (year later)
   df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Never Used" | df_wide2$usage_label_yr_later == "Tested Product Only"),]
   
 }
+
+# SUBSET DATA: remove coaches and inspearational teachers
+#BigDF[ !(BigDF$ID %in% SmallDF$ID), ]
+df_wide2 <- df_wide2[ !(df_wide2$teacher %in% df_coach_insp$hashed_coach_id), ]
+
+# Remove columns of disinterest to all models: usage_label_yr_later (needed it to screen out rows for model_num == 2)
+df_wide2 <- df_wide2[ ,-12]
 
 # Examine missing data 
 sum(is.na(df_wide2))
@@ -1769,7 +1783,7 @@ sum(is.na(df_wide2))
 df_wide2 <- na.omit(df_wide2)
 
 ################
-# SUBSET: Columns (model specific)
+# SUBSET/PREP (model specific): Removel columns & create dummy variables
 ################
 
 # Create df with only variables of interest
@@ -1780,161 +1794,274 @@ model_df <- df_wide2
 # Initialize vector
 remove_variables = as.integer()
 
-
-if(i == 1) {
-  # Set list of variables to remove
-  variables = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_premium", "dep_premiumtrial", "dep_free")
+# Define subsetting function
+subset_cols <- function(v, dv, ULIM = FALSE, bv, bcrm = TRUE) {
+  # v = list of variables to remove
+  # dv = dependent variable
+  # ULIM = including usage_label_initial_months: TRUE/FALSE (default: FALSE)
+  # bv = base cases
+  # bcrm = base case remove - TRUE/FALSE (default: TRUE)
   
-  # Set dependent variable
-  dep_var_num = which(colnames(model_df)=="dep_prez_usage_yr_later")
-
-} else if(i == 2) {
   # Set list of variables to remove
-  variables = c("dep_prez_usage_yr_later", "dep_premium", "dep_premiumtrial", "dep_free")
-
-} else if(i == 3) {
-    # Set list of variables to remove
-    variables = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premium", "dep_premiumtrial")
-    
-} else if(i == 4) {
-    # Set list of variables to remove
-    variables = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premiumtrial", "dep_free")
-    
-} else if(i == 5) {
-    # Set list of variables to remove
-    variables = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premium", "dep_free")
-    
-  # NOTE: not removing any of the remaining columns for the cluster model (i == 6)
-}
-
-# Pull list of column numbers for each variable to remove
-for (varnum in 1:length(variables)) {
-  remove_variables = append(remove_variables, which(colnames(model_df)== variables[[varnum]]), after = length(remove_variables))
-}
-
-if(i != 6) {
+  variables = v
   
-  # Reorder columns so dependent variable is last
-  model_df <- model_df[ ,c((1:ncol(model_df))[-dep_var_num], dep_var_num)]
+  # Pull list of column numbers for each variable to remove
+  for (varnum in 1:length(variables)) {
+    remove_variables = append(remove_variables, which(colnames(model_df)== variables[[varnum]]), after = length(remove_variables))
+  }
   
   # Remove variables of disinterest
   model_df <- model_df[,-c(remove_variables)]
   
+  # Create indicator variables
+  model_df <- dummy_cols(model_df)
+  
+  # Remove original categorical variables
+  model_df <- model_df[,-c(which(colnames(model_df)=="total_prez_aud_label"))]
+  
+  if(ULIM == TRUE) { model_df <- model_df[,-c(which(colnames(model_df)=="usage_label_initial_months"))] }
+  
+  if(bcrm == TRUE) {
+    
+    # Pull list of column numbers for each base case (dummy variables)
+    for (varnum in 1:length(bv)) {
+      remove_variables = append(remove_variables, which(colnames(model_df)== bv[[varnum]]), after = length(remove_variables))
+    }
+    
+    # Remove base case(s) (dummy variables)
+    model_df <- model_df[,-c(remove_variables)]
+  }
+  
+  # Set dependent variable
+  dep_var_num = which(colnames(model_df)==dv)
+  
+  # Reorder columns so dependent variable is last
+  model_df <<- model_df[ ,c((1:ncol(model_df))[-dep_var_num], dep_var_num)]
 }
+
+
+if(model_num == 1) {
+  
+  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_premium", "dep_premiumtrial", "dep_free"), dv ="dep_prez_usage_yr_later", bv="total_prez_aud_label_None")
+  
+} else if(model_num == 2) {
+  
+  subset_cols(v = c("dep_prez_usage_yr_later", "dep_premium", "dep_premiumtrial", "dep_free"), dv = "dep_total_presentations_yr_later", ULIM = TRUE, bv=c("usage_label_initial_months_Tested Product Only","total_prez_aud_label_None"))
+  
+} else if(model_num == 3) {
+  
+  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premium", "dep_premiumtrial"), dv = "dep_free", bv="total_prez_aud_label_None")
+  
+} else if(model_num == 4) {
+  
+  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premiumtrial", "dep_free"), dv = "dep_premium", bv="total_prez_aud_label_None")
+  
+} else if(model_num == 5) {
+  
+  subset_cols(v =  c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premium", "dep_free"), dv = "dep_premiumtrial", bv="total_prez_aud_label_None") 
+  
+} else if(model_num == 6) {
+  
+  # NOTE: not removing any of the remaining columns for the cluster model (model_num == 6)
+  
+  # Create indicator variables
+  model_df <- dummy_cols(model_df)
+  
+  # Remove original categorical variables
+  model_df <- model_df[,-c(which(colnames(model_df)=="total_prez_aud_label" | colnames(model_df)=="usage_label_initial_months"))]
+} 
 
 ###########################################
 # MODEL: Logistic Regression
 ###########################################
 
-################
-# RUN MODEL
-################
-
-# Print the name of the dependent variable (before renaming it)
-print(paste("Dependent variable:", colnames(model_df)[ncol(model_df)]))
-
-# Rename dependent variable
-colnames(model_df)[ncol(model_df)] = "dep_var"
-
-# Turn dependent variable into a factor
-model_df$dep_var <- as.factor(model_df$dep_var)
-
-# Loop while there's significant P-Values in the model (i.e. > 0.05) until only significant P-Values remain
-#Removes insignificant variables one at a time by the highest P-value
-for(iter in 1:(ncol(model_df)-1)) {
-
-  # Run first iteration of the model
-  if(iter == 1){
-    
-    # Run model
-    LRmodel <- glm(dep_var ~ ., family = binomial, data = model_df, control = list(maxit = 50))
-    
-    # Print model output
-    ptest<-data.frame(coef(summary(LRmodel)))
-    print(paste("Iteration:",iter))
-    print(ptest)
-  }
+if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   
-  # While there are insignificant P-Values
-  while (ptest$Pr...z..[which(ptest$Pr...z.. == max(ptest$Pr...z..))] > 0.05) {
+  ################
+  # RUN MODEL
+  ################
+  
+  # Print the name of the dependent variable (before renaming it)
+  print(paste("Dependent variable:", colnames(model_df)[ncol(model_df)]))
+  
+  # Rename dependent variable
+  colnames(model_df)[ncol(model_df)] = "dep_var"
+  
+  # Turn dependent variable into a factor
+  model_df$dep_var <- as.factor(model_df$dep_var)
+  
+  # Loop while there's significant P-Values in the model (i.e. > 0.05) until only significant P-Values remain
+  #Removes insignificant variables one at a time by the highest P-value
+  for(loop_n in 1:(ncol(model_df)-1)) {
     
-    # Run model
-    LRmodel <- glm(dep_var ~ ., family = binomial, data = model_df, control = list(maxit = 50)) 
-    
-    # Print model output
-    ptest<-data.frame(coef(summary(LRmodel)))
-    print(paste("Iteration:",iter))
-    print(ptest)
-    
-    # If highest P-Value is > 0.05, then:
-    if(ptest$Pr...z..[which(ptest$Pr...z.. == max(ptest$Pr...z..))] > 0.05) { 
-      drop_col <- row.names(ptest)[which(ptest$Pr...z.. == max(ptest$Pr...z..))] # Name of attribute w/ highest P-Value
-      print(paste("Attribute with highest insignificant P-Value:", drop_col))
+    # Run first iteration of the model
+    if(loop_n == 1){
       
-      model_df <- model_df[,-which(colnames(model_df)==drop_col)]
+      # Run model
+      LRmodel <- glm(dep_var ~ ., family = binomial, data = model_df, control = list(maxit = 50))
+      
+      # Print model output
+      ptest<-data.frame(coef(summary(LRmodel)))
+      print(paste("Iteration:", 1, " (no variables removed)"))
+      print(ptest)
+      
+      # Initialize iter for use in while loop
+      iter = 1
+    }
+    
+    # While there are insignificant P-Values
+    while (max(ptest$Pr...z..[-which(rownames(ptest) == "(Intercept)")]) > 0.05) {
+      
+      # Count iterations
+      iter = iter + 1
+      
+      # Run model
+      LRmodel <- glm(dep_var ~ ., family = binomial, data = model_df, control = list(maxit = 50))
+      
+      # Print model output
+      ptest<-data.frame(coef(summary(LRmodel)))
+      print(paste("Iteration:",iter))
+      print(ptest)
+      
+      # If highest P-Value is > 0.05, then:
+      if(max(ptest$Pr...z..[-which(rownames(ptest) == "(Intercept)")]) > 0.05) {
+        drop_col <- row.names(ptest)[which(ptest$Pr...z.. == max(ptest$Pr...z..[-which(rownames(ptest) == "(Intercept)")]) ) ] # Name of attribute w/ highest P-Value
+        drop_col <- str_replace_all(drop_col, "`", "")
+        print(paste("Attribute with highest insignificant P-Value:", drop_col))
+        
+        model_df <- model_df[,-which(colnames(model_df)==drop_col)]
+      }
+      
     }
     
   }
   
+  ################
+  # EVALUATE MODEL
+  ################
+  
+  ## 4 Ways to calculate the RMSE
+  # 1st
+  #sqrt(mean(Lmodel$residuals^2))
+  
+  # 2nd
+  # output <- predict(Lmodel, test)
+  # sqrt(mean(output$dep_var - output$prediction)^2)
+  
+  # 3rd
+  # sigma(Lmodel)
+  
+  # 4th
+  # RSS <- c(crossprod(Lmodel$residuals))
+  # MSE <- RSS / length(Lmodel$residuals)
+  # RMSE <- sqrt(MSE)
+  
+  # NOT SURE IF WE SHOULD USE OR NOT - DECIDE LATER
+  # https://stats.idre.ucla.edu/other/mult-pkg/faq/general/faq-what-are-pseudo-r-squareds/
+  library(rcompanion) #<-pseudo R-Squared
+  results_nk <- nagelkerke(LRmodel)
+  results_nk<-data.frame(as.matrix(results_nk))
+  results_nk<-data.frame(results_nk[2,])
+  print(results_nk)
+  
+  # Apply to TEST & examine accuracy
+  pred_prob_lr<-predict(LRmodel, test, type = "response")
+  pred_label_lr=character(0)
+  pred_label_lr[which(pred_prob_lr>0.5)]<-"Fatal"
+  pred_label_lr[which(pred_prob_lr<=0.5)]<-"Alive"
+  contable<-table(pred_label_lr,test_label)
+  kable(contable, caption = "Confusion Matrix")
+  
+  accuracy <- (contable[4]+contable[1])/(contable[1]+contable[2]+contable[3]+contable[4])
+  precision <- (contable[4])/(contable[4]+contable[2])
+  recall <- (contable[4])/(contable[4]+contable[3])
+  
+  print("The following variables were found to be significant at the 95% confidence level:")
+  library(broom)
+  results_tidy <- tidy(LRmodel)
+  kable(results_tidy$term[which(results_tidy$term != "(Intercept)")])
+  
+  print("Below are the odds (exp(Beta)) of the accident being a fatality. Greater than 1 indicates increasing odds and less than 1 indicates decreasing odds.")
+  #Examine model and coefficients
+  # For every 1 unit increase in x, the odds of the accident being a fatality is * coefficient. (>1 means going up. <1 means going down.)
+  ptest <- data.frame(coef(summary(LRmodel)))
+  #coef(summary(LRmodel))
+  odds <- data.frame(exp(LRmodel$coefficients))
+  odds$exp.LRmodel.coefficients. <- round(odds$exp.LRmodel.coefficients.,3)
+  kable(odds, col.names = "Odds") %>% kable_styling(full_width = FALSE, position = "left")
+  
 }
 
-################
-# EVALUATE MODEL
-################
+###########################################
+# MODEL: Linear Regression
+###########################################
 
-## 4 Ways to calculate the RMSE
-# 1st
-#sqrt(mean(Lmodel$residuals^2))
+if(model_num == 2) {
   
-# 2nd
-# output <- predict(Lmodel, test)
-# sqrt(mean(output$dep_var - output$prediction)^2)
+  ################
+  # RUN MODEL
+  ################
   
-# 3rd
-# sigma(Lmodel)
-
-# 4th
-# RSS <- c(crossprod(Lmodel$residuals))
-# MSE <- RSS / length(Lmodel$residuals)
-# RMSE <- sqrt(MSE)
-
-
+  # Print the name of the dependent variable (before renaming it)
+  print(paste("Dependent variable:", colnames(model_df)[ncol(model_df)]))
   
-# NOT SURE IF WE SHOULD USE OR NOT - DECIDE LATER
-# https://stats.idre.ucla.edu/other/mult-pkg/faq/general/faq-what-are-pseudo-r-squareds/
-library(rcompanion) #<-pseudo R-Squared
-results_nk <- nagelkerke(LRmodel)
-results_nk<-data.frame(as.matrix(results_nk))
-results_nk<-data.frame(results_nk[2,])
-print(results_nk)
+  # Rename dependent variable
+  colnames(model_df)[ncol(model_df)] = "dep_var"
+  
+  # Loop while there's significant P-Values in the model (i.e. > 0.05) until only significant P-Values remain
+  #Removes insignificant variables one at a time by the highest P-value
+  for(loop_n in 1:(ncol(model_df)-1)) {
+    
+    # Run first iteration of the model
+    if(loop_n == 1){
+      
+      # Run model
+      LRmodel <- glm(dep_var ~ ., family = gaussian, data = model_df, control = list(maxit = 50)) # Should this be gaussian or poisson? How to decide? Something else?
+      
+      # Print model output
+      ptest<-data.frame(coef(summary(LRmodel)))
+      print(paste("Iteration:", 1, " (no variables removed)"))
+      print(ptest)
+      
+      # Initialize iter for use in while loop
+      iter = 1
+    }
+    
+    # While there are insignificant P-Values
+    while (max(ptest$Pr...t..[-which(rownames(ptest) == "(Intercept)")]) > 0.05) {
+      
+      # Count iterations
+      iter = iter + 1
+      
+      # Run model
+      LRmodel <- glm(dep_var ~ ., family = gaussian, data = model_df, control = list(maxit = 50))
+      
+      # Print model output
+      ptest<-data.frame(coef(summary(LRmodel)))
+      print(paste("Iteration:",iter))
+      print(ptest)
+      
+      # If highest P-Value is > 0.05, then:
+      if(max(ptest$Pr...t..[-which(rownames(ptest) == "(Intercept)")]) > 0.05) {
+        drop_col <- row.names(ptest)[which(ptest$Pr...t.. == max(ptest$Pr...t..[-which(rownames(ptest) == "(Intercept)")]) ) ] # Name of attribute w/ highest P-Value
+        drop_col <- str_replace_all(drop_col, "`", "")
+        print(paste("Attribute with highest insignificant P-Value:", drop_col))
+        
+        model_df <- model_df[,-(which(colnames(model_df)==drop_col))]
+      }
+      
+    }
+    
+  }
+  
+  ################
+  # EVALUATE MODEL
+  ################
+  
+  
+}
 
-# Apply to TEST & examine accuracy
-pred_prob_lr<-predict(LRmodel, test, type = "response")
-pred_label_lr=character(0)
-pred_label_lr[which(pred_prob_lr>0.5)]<-"Fatal"
-pred_label_lr[which(pred_prob_lr<=0.5)]<-"Alive"
-contable<-table(pred_label_lr,test_label)
-kable(contable, caption = "Confusion Matrix")
-
-accuracy <- (contable[4]+contable[1])/(contable[1]+contable[2]+contable[3]+contable[4])
-precision <- (contable[4])/(contable[4]+contable[2])
-recall <- (contable[4])/(contable[4]+contable[3])
-
-print("The following variables were found to be significant at the 95% confidence level:")
-library(broom)
-results_tidy <- tidy(LRmodel)
-kable(results_tidy$term[which(results_tidy$term != "(Intercept)")])
-
-print("Below are the odds (exp(Beta)) of the accident being a fatality. Greater than 1 indicates increasing odds and less than 1 indicates decreasing odds.")
-#Examine model and coefficients
-# For every 1 unit increase in x, the odds of the accident being a fatality is * coefficient. (>1 means going up. <1 means going down.)
-ptest <- data.frame(coef(summary(LRmodel)))
-#coef(summary(LRmodel))
-odds <- data.frame(exp(LRmodel$coefficients))
-odds$exp.LRmodel.coefficients. <- round(odds$exp.LRmodel.coefficients.,3)
-kable(odds, col.names = "Odds") %>% kable_styling(full_width = FALSE, position = "left")
-
-# Last code update: 12/5/19
+# Last code update: 12/7/19
 
 ##############################################################################
 # Analysis
