@@ -1966,6 +1966,32 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   # MSE <- RSS / length(Lmodel$residuals)
   # RMSE <- sqrt(MSE)
   
+  ## 4 Ways to calculate the AUC
+  # 1st
+  # Library (pROC)
+  # Syntax (response, predictor)
+  # auc(output$dep_var, output$prediction)
+
+  # 2nd
+  # library (ROC)
+  # roc_ROCR <- performance(LRmodel, measure = "tpr", x.measure = "fpr")
+  # plot(roc_ROCR, main = "ROC curve", colorize = T)
+  # abline(a = 0, b = 1)
+  # auc_ROCR <- performance(LRmodel, measure = "auc")
+  # auc_ROCR <- auc_ROCR@y.values[[1]]
+  
+  # 3rd
+  # library (ROCR)
+  # auc.tmp <- performance(LRmodel,"auc")
+  # auc <- as.numeric(auc.tmp@y.values)
+  # plot(auc)
+
+  
+  # 4th
+  # library (mltools)
+  # auc_roc(output$dep_var, output$prediction)
+
+  
   # NOT SURE IF WE SHOULD USE OR NOT - DECIDE LATER
   # https://stats.idre.ucla.edu/other/mult-pkg/faq/general/faq-what-are-pseudo-r-squareds/
   library(rcompanion) #<-pseudo R-Squared
