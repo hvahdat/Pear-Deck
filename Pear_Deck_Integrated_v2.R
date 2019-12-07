@@ -1882,7 +1882,7 @@ for(iter in 1:(ncol(model_df)-1)) {
 # EVALUATE MODEL
 ################
 
-## 3 Ways to calculate the RMSE
+## 4 Ways to calculate the RMSE
 # 1st
 #sqrt(mean(Lmodel$residuals^2))
   
@@ -1892,6 +1892,12 @@ for(iter in 1:(ncol(model_df)-1)) {
   
 # 3rd
 # sigma(Lmodel)
+
+# 4th
+# RSS <- c(crossprod(Lmodel$residuals))
+# MSE <- RSS / length(Lmodel$residuals)
+# RMSE <- sqrt(MSE)
+
 
   
 # NOT SURE IF WE SHOULD USE OR NOT - DECIDE LATER
