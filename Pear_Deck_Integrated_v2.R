@@ -1882,6 +1882,18 @@ for(iter in 1:(ncol(model_df)-1)) {
 # EVALUATE MODEL
 ################
 
+## 3 Ways to calculate the RMSE
+# 1st
+#sqrt(mean(Lmodel$residuals^2))
+  
+# 2nd
+# output <- predict(Lmodel, test)
+# sqrt(mean(output$dep_var - output$prediction)^2)
+  
+# 3rd
+# sigma(Lmodel)
+
+  
 # NOT SURE IF WE SHOULD USE OR NOT - DECIDE LATER
 # https://stats.idre.ucla.edu/other/mult-pkg/faq/general/faq-what-are-pseudo-r-squareds/
 library(rcompanion) #<-pseudo R-Squared
