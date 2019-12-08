@@ -1790,6 +1790,9 @@ df_wide2 <- df_wide2[,-17]
 # Set model number (see models_list for key)
 model_num = 1
 
+# Set level of significance 
+sign_level = 0.1
+
 # Set models_list
 models_list = list("prez_usage_binary", "total_prez_cont", "sub_status_free_binary", "sub_status_premium_binary", "sub_status_premiumtrial_binary", "clustering")
 
@@ -1983,7 +1986,7 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   # RUN MODEL
   ################
   
-  # Loop while there's significant P-Values in the model (i.e. > 0.05) until only significant P-Values remain
+  # Loop while there's significant P-Values in the model until only significant P-Values remain
   #Removes insignificant variables one at a time by the highest P-value
   for(loop_n in 1:(ncol(trainSplit)-1)) {
     
@@ -2003,7 +2006,7 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
     }
     
     # While there are insignificant P-Values
-    while (max(ptest$Pr...z..[-which(rownames(ptest) == "(Intercept)")]) > 0.05) {
+    while (max(ptest$Pr...z..[-which(rownames(ptest) == "(Intercept)")]) > sign_level) {
       
       # Count iterations
       iter = iter + 1
@@ -2016,8 +2019,8 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
       print(paste("Iteration:",iter))
       print(ptest)
       
-      # If highest P-Value is > 0.05, then:
-      if(max(ptest$Pr...z..[-which(rownames(ptest) == "(Intercept)")]) > 0.05) {
+      # If highest P-Value is > sign_level, then:
+      if(max(ptest$Pr...z..[-which(rownames(ptest) == "(Intercept)")]) > sign_level) {
         drop_col <- row.names(ptest)[which(ptest$Pr...z.. == max(ptest$Pr...z..[-which(rownames(ptest) == "(Intercept)")]) ) ] # Name of attribute w/ highest P-Value
         drop_col <- str_replace_all(drop_col, "`", "")
         print(paste("Attribute with highest insignificant P-Value:", drop_col))
@@ -2091,7 +2094,7 @@ if(model_num == 2) {
   # RUN MODEL
   ################
   
-  # Loop while there's significant P-Values in the model (i.e. > 0.05) until only significant P-Values remain
+  # Loop while there's significant P-Values in the model until only significant P-Values remain
   #Removes insignificant variables one at a time by the highest P-value
   for(loop_n in 1:(ncol(trainSplit)-1)) {
     
@@ -2111,7 +2114,7 @@ if(model_num == 2) {
     }
     
     # While there are insignificant P-Values
-    while (max(ptest$Pr...t..[-which(rownames(ptest) == "(Intercept)")]) > 0.05) {
+    while (max(ptest$Pr...t..[-which(rownames(ptest) == "(Intercept)")]) > sign_level) {
       
       # Count iterations
       iter = iter + 1
@@ -2124,8 +2127,8 @@ if(model_num == 2) {
       print(paste("Iteration:",iter))
       print(ptest)
       
-      # If highest P-Value is > 0.05, then:
-      if(max(ptest$Pr...t..[-which(rownames(ptest) == "(Intercept)")]) > 0.05) {
+      # If highest P-Value is > sign_level, then:
+      if(max(ptest$Pr...t..[-which(rownames(ptest) == "(Intercept)")]) > sign_level) {
         drop_col <- row.names(ptest)[which(ptest$Pr...t.. == max(ptest$Pr...t..[-which(rownames(ptest) == "(Intercept)")]) ) ] # Name of attribute w/ highest P-Value
         drop_col <- str_replace_all(drop_col, "`", "")
         print(paste("Attribute with highest insignificant P-Value:", drop_col))
