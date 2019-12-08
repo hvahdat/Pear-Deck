@@ -28,6 +28,7 @@ library(fastDummies)
 library(xlsx)
 library(caret)
 library(pROC)
+library(knitr)
 
 # Set working directory
 setwd("C:\\Users\\katie\\Dropbox\\Grad School - Business Analytics Masters Program\\2019 Fall Classes\\Pear Deck - Analytics Experience\\R Scripts")
@@ -1712,6 +1713,10 @@ ggplot(data=df_wide2, aes(x=dep_total_presentations_yr_later, y=slideDiversity))
 # SUBSET DATA: remove columns of disinterest to all models
 df_wide2 <- df_wide[,-c(1:6,8:10, 12, 18:27, 31:33, 35:36, 49)]
 
+# Remove PremiumTrial folks (since we can't tell if they're coaches/inspearational teachers)
+df_wide2 <- df_wide2[-which(df_wide2$dep_premiumtrial == 1), ]
+df_wide2 <- df_wide2[,-17]
+
 # SUBSET DATA: (remove "Never Used" during intial months)
 df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Never Used"),]
 
@@ -1755,6 +1760,10 @@ write.xlsx(df_corr, "correlations.xlsx")
 
 # Remove columns of disinterest to all models (start fresh with df_wide again)
 df_wide2 <- df_wide[,-c(1:6,8:10, 12, 18:27, 31:33, 36, 49)] # Note: one more removed later
+
+# Remove PremiumTrial folks (since we can't tell if they're coaches/inspearational teachers)
+df_wide2 <- df_wide2[-which(df_wide2$dep_premiumtrial == 1), ]
+df_wide2 <- df_wide2[,-17]
 
 ################
 # SUBSET: Rows (model specific)
@@ -1856,7 +1865,7 @@ subset_cols <- function(v, dv, ULIM = FALSE, bv, bcrm = TRUE) {
 
 if(model_num == 1) {
   
-  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_premium", "dep_premiumtrial", "dep_free"), dv ="dep_prez_usage_yr_later", bv="total_prez_aud_label_None")
+  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_premium", "dep_premiumtrial", "dep_free","prez_usage_initial"), dv ="dep_prez_usage_yr_later", bv="total_prez_aud_label_None")
   
 } else if(model_num == 2) {
   
@@ -1864,15 +1873,15 @@ if(model_num == 1) {
   
 } else if(model_num == 3) {
   
-  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premium", "dep_premiumtrial"), dv = "dep_free", bv="total_prez_aud_label_None")
+  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premium", "dep_premiumtrial","prez_usage_initial"), dv = "dep_free", bv="total_prez_aud_label_None")
   
 } else if(model_num == 4) {
   
-  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premiumtrial", "dep_free"), dv = "dep_premium", bv="total_prez_aud_label_None")
+  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premiumtrial", "dep_free","prez_usage_initial"), dv = "dep_premium", bv="total_prez_aud_label_None")
   
 } else if(model_num == 5) {
   
-  subset_cols(v =  c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premium", "dep_free"), dv = "dep_premiumtrial", bv="total_prez_aud_label_None") 
+  subset_cols(v =  c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premium", "dep_free","prez_usage_initial"), dv = "dep_premiumtrial", bv="total_prez_aud_label_None") 
   
 } else if(model_num == 6) {
   
@@ -1964,10 +1973,10 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
     if(loop_n == 1){
       
       # Run model
-      LRmodel <- glm(dep_var ~ ., family = binomial, data = trainSplit, control = list(maxit = 50))
+      LRmodel <<- glm(dep_var ~ ., family = binomial, data = trainSplit, control = list(maxit = 50))
       
       # Print model output
-      ptest<-data.frame(coef(summary(LRmodel)))
+      ptest<<-data.frame(coef(summary(LRmodel)))
       print(paste("Iteration:", 1, " (no variables removed)"))
       print(ptest)
       
@@ -1982,10 +1991,10 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
       iter = iter + 1
       
       # Run model
-      LRmodel <- glm(dep_var ~ ., family = binomial, data = trainSplit, control = list(maxit = 50))
+      LRmodel <<- glm(dep_var ~ ., family = binomial, data = trainSplit, control = list(maxit = 50))
       
       # Print model output
-      ptest<-data.frame(coef(summary(LRmodel)))
+      ptest<<-data.frame(coef(summary(LRmodel)))
       print(paste("Iteration:",iter))
       print(ptest)
       
@@ -1995,14 +2004,14 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
         drop_col <- str_replace_all(drop_col, "`", "")
         print(paste("Attribute with highest insignificant P-Value:", drop_col))
         
-        trainSplit <- trainSplit[,-which(colnames(trainSplit)==drop_col)]
+        trainSplit <<- trainSplit[,-which(colnames(trainSplit)==drop_col)]
       }
       
     }
     
   }
   
-  prediction <- predict(LRmodel, testSplit, type = "response")
+  testSplit$prediction <- predict(LRmodel, testSplit, type = "response")
   
   ################
   # EVALUATE MODEL
@@ -2011,25 +2020,6 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   # Calculate AUC
   # Pseudo code: auc(response, predictor)
   auc(testSplit$dep_var, testSplit$prediction)
-  
-  # 2nd
-  # library (ROC)
-  # roc_ROCR <- performance(LRmodel, measure = "tpr", x.measure = "fpr")
-  # plot(roc_ROCR, main = "ROC curve", colorize = T)
-  # abline(a = 0, b = 1)
-  # auc_ROCR <- performance(LRmodel, measure = "auc")
-  # auc_ROCR <- auc_ROCR@y.values[[1]]
-  
-  # 3rd
-  # library (ROCR)
-  # auc.tmp <- performance(LRmodel,"auc")
-  # auc <- as.numeric(auc.tmp@y.values)
-  # plot(auc)
-  
-  
-  # 4th
-  # library (mltools)
-  # auc_roc(output$dep_var, output$prediction)
   
   # NOT SURE IF WE SHOULD USE OR NOT - DECIDE LATER
   # https://stats.idre.ucla.edu/other/mult-pkg/faq/general/faq-what-are-pseudo-r-squareds/
@@ -2040,21 +2030,27 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   print(results_nk)
   
   # Apply to TEST & examine accuracy
-  pred_prob_lr<-predict(LRmodel, test, type = "response")
-  pred_label_lr=character(0)
-  pred_label_lr[which(pred_prob_lr>0.5)]<-"Fatal"
-  pred_label_lr[which(pred_prob_lr<=0.5)]<-"Alive"
-  contable<-table(pred_label_lr,test_label)
-  kable(contable, caption = "Confusion Matrix")
+  # pred_prob_lr<-predict(LRmodel, test, type = "response")
+  testSplit$prediction_label <- as.numeric(NA)
+  testSplit$prediction_label[which(testSplit$prediction > 0.5)] <- 0
+  testSplit$prediction_label[which(testSplit$prediction <= 0.5)] <- 1
+  contable <- table(testSplit$prediction_label,testSplit$dep_var)
+  print(contable)
+  #kable(contable, caption = "Confusion Matrix")
   
   accuracy <- (contable[4]+contable[1])/(contable[1]+contable[2]+contable[3]+contable[4])
   precision <- (contable[4])/(contable[4]+contable[2])
   recall <- (contable[4])/(contable[4]+contable[3])
   
+  print(paste("Accuracy: ", accuracy))
+  print(paste("Precision: ", precision))
+  print(paste("Recall: ", recall))
+  
   print("The following variables were found to be significant at the 95% confidence level:")
   library(broom)
   results_tidy <- tidy(LRmodel)
-  kable(results_tidy$term[which(results_tidy$term != "(Intercept)")])
+  #kable(results_tidy$term[which(results_tidy$term != "(Intercept)")])
+  print(results_tidy$term[which(results_tidy$term != "(Intercept)")])
   
   print("Below are the odds (exp(Beta)) of the accident being a fatality. Greater than 1 indicates increasing odds and less than 1 indicates decreasing odds.")
   #Examine model and coefficients
@@ -2062,8 +2058,8 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   ptest <- data.frame(coef(summary(LRmodel)))
   #coef(summary(LRmodel))
   odds <- data.frame(exp(LRmodel$coefficients))
-  odds$exp.LRmodel.coefficients. <- round(odds$exp.LRmodel.coefficients.,3)
-  kable(odds, col.names = "Odds") %>% kable_styling(full_width = FALSE, position = "left")
+  #odds$exp.LRmodel.coefficients. <- round(odds$exp.LRmodel.coefficients.,3)
+  print(odds)
   
 }
 
@@ -2085,10 +2081,10 @@ if(model_num == 2) {
     if(loop_n == 1){
       
       # Run model
-      LRmodel <- glm(dep_var ~ ., family = gaussian, data = trainSplit, control = list(maxit = 50)) # Should this be gaussian or poisson? How to decide? Something else?
+      LRmodel <<- glm(dep_var ~ ., family = gaussian, data = trainSplit, control = list(maxit = 50)) # Should this be gaussian or poisson? How to decide? Something else?
       
       # Print model output
-      ptest<-data.frame(coef(summary(LRmodel)))
+      ptest<<-data.frame(coef(summary(LRmodel)))
       print(paste("Iteration:", 1, " (no variables removed)"))
       print(ptest)
       
@@ -2103,10 +2099,10 @@ if(model_num == 2) {
       iter = iter + 1
       
       # Run model
-      LRmodel <- glm(dep_var ~ ., family = gaussian, data = trainSplit, control = list(maxit = 50))
+      LRmodel <<- glm(dep_var ~ ., family = gaussian, data = trainSplit, control = list(maxit = 50))
       
       # Print model output
-      ptest<-data.frame(coef(summary(LRmodel)))
+      ptest<<-data.frame(coef(summary(LRmodel)))
       print(paste("Iteration:",iter))
       print(ptest)
       
@@ -2116,7 +2112,7 @@ if(model_num == 2) {
         drop_col <- str_replace_all(drop_col, "`", "")
         print(paste("Attribute with highest insignificant P-Value:", drop_col))
         
-        trainSplit <- trainSplit[,-(which(colnames(trainSplit)==drop_col))]
+        trainSplit <<- trainSplit[,-(which(colnames(trainSplit)==drop_col))]
       }
       
     }
