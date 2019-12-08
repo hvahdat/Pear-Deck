@@ -26,6 +26,7 @@ library(zoo)
 library(data.table)
 library(fastDummies)
 library(xlsx)
+library(caret)
 
 # Set working directory
 setwd("C:\\Users\\katie\\Dropbox\\Grad School - Business Analytics Masters Program\\2019 Fall Classes\\Pear Deck - Analytics Experience\\R Scripts")
@@ -893,6 +894,8 @@ THEN 1 ELSE 0 END) AS after_session_prop,
 SUM(CASE WHEN Event IN ('account_1_prompt_for_role')
 THEN 1 ELSE 0 END) AS before_signup_prop
 
+--, SUM(CASE WHEN Event = 'presenter_asked_quick_question' THEN 1 ELSE 0 END) AS uses_qq
+
 FROM `peardeck-external-projects.buisness_analytics_in_practice_project.app_events` ae JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf ON ae.user_id = uf.externalid
 
 WHERE (DATE(timestamp) BETWEEN DATE(FirstSeen) AND DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH))
@@ -906,12 +909,12 @@ GROUP BY user_id"
 df_ae <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
 
 # Sum all the app_event rows
-df_ae$total <- rowSums(df_ae[,2:ncol(df_ae)], na.rm=FALSE)
+df_ae$total <- rowSums(df_ae[,2:(ncol(df_ae))], na.rm=FALSE)
 
 # Turn all the counts into proportions (normalized using the sum of all app_events)
 
 for(n in 2:(ncol(df_ae)-1)) {
-  df_ae[n] <- df_ae[n] / df_ae[ncol(df_ae)]
+  df_ae[n] <- df_ae[n] / df_ae[(ncol(df_ae))]
 }
 
 ##############################################################################
@@ -1881,6 +1884,62 @@ if(model_num == 1) {
   model_df <- model_df[,-c(which(colnames(model_df)=="total_prez_aud_label" | colnames(model_df)=="usage_label_initial_months"))]
 } 
 
+# Print the name of the dependent variable (before renaming it)
+print(paste("Dependent variable:", colnames(model_df)[ncol(model_df)]))
+
+# Rename dependent variable
+colnames(model_df)[ncol(model_df)] = "dep_var"
+
+# Turn dependent variable into a factor
+model_df$dep_var <- as.factor(model_df$dep_var)
+
+###########################################
+# SPLIT TRAIN/TEST: Model Specific
+###########################################
+
+# Set instance to serve as basis for random split (below)
+set.seed(1234)
+
+# Randomly split into train and test sets
+splitIndex <- createDataPartition(model_df$dep_var,
+                                  p = .80,
+                                  list = FALSE,
+                                  times = 1)
+
+# 80% into train
+trainSplit <- model_df[splitIndex,]
+
+# 20% into test
+testSplit <- model_df[-splitIndex,]
+
+
+###########################################
+# REBALANCE DATA: Model Specific
+###########################################
+
+# Examine proportions of train vs test to ensure dependent variable is relatively balanced (close to 50/50)
+print(prop.table(table(trainSplit$dep_var)))
+print(prop.table(table(testSplit$dep_var)))
+
+# Model #5 is very unbalanced and requires upsampling to rabalance the classes
+if(model_num == 5) {
+
+  # Check counts of each class
+  #Original training data (80% of model_df data here)
+  #Heavy imbalance
+  table(trainSplit$dep_var)
+  
+  # Upsample (train set only) on the premiumtrial variable
+  dep_var <- as.factor(trainSplit$dep_var)
+  trainSplit <- upSample(trainSplit, dep_var)
+  
+  #Checks out 1940 vs 1940 data points
+  #Now balanced via the upsample
+  table(trainSplit$dep_var)
+  
+}
+
+
 ###########################################
 # MODEL: Logistic Regression
 ###########################################
@@ -1891,24 +1950,15 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   # RUN MODEL
   ################
   
-  # Print the name of the dependent variable (before renaming it)
-  print(paste("Dependent variable:", colnames(model_df)[ncol(model_df)]))
-  
-  # Rename dependent variable
-  colnames(model_df)[ncol(model_df)] = "dep_var"
-  
-  # Turn dependent variable into a factor
-  model_df$dep_var <- as.factor(model_df$dep_var)
-  
   # Loop while there's significant P-Values in the model (i.e. > 0.05) until only significant P-Values remain
   #Removes insignificant variables one at a time by the highest P-value
-  for(loop_n in 1:(ncol(model_df)-1)) {
+  for(loop_n in 1:(ncol(trainSplit)-1)) {
     
     # Run first iteration of the model
     if(loop_n == 1){
       
       # Run model
-      LRmodel <- glm(dep_var ~ ., family = binomial, data = model_df, control = list(maxit = 50))
+      LRmodel <- glm(dep_var ~ ., family = binomial, data = trainSplit, control = list(maxit = 50))
       
       # Print model output
       ptest<-data.frame(coef(summary(LRmodel)))
@@ -1926,7 +1976,7 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
       iter = iter + 1
       
       # Run model
-      LRmodel <- glm(dep_var ~ ., family = binomial, data = model_df, control = list(maxit = 50))
+      LRmodel <- glm(dep_var ~ ., family = binomial, data = trainSplit, control = list(maxit = 50))
       
       # Print model output
       ptest<-data.frame(coef(summary(LRmodel)))
@@ -1939,7 +1989,7 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
         drop_col <- str_replace_all(drop_col, "`", "")
         print(paste("Attribute with highest insignificant P-Value:", drop_col))
         
-        model_df <- model_df[,-which(colnames(model_df)==drop_col)]
+        trainSplit <- trainSplit[,-which(colnames(trainSplit)==drop_col)]
       }
       
     }
@@ -1971,7 +2021,7 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   # Library (pROC)
   # Syntax (response, predictor)
   # auc(output$dep_var, output$prediction)
-
+  
   # 2nd
   # library (ROC)
   # roc_ROCR <- performance(LRmodel, measure = "tpr", x.measure = "fpr")
@@ -1985,12 +2035,11 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   # auc.tmp <- performance(LRmodel,"auc")
   # auc <- as.numeric(auc.tmp@y.values)
   # plot(auc)
-
+  
   
   # 4th
   # library (mltools)
   # auc_roc(output$dep_var, output$prediction)
-
   
   # NOT SURE IF WE SHOULD USE OR NOT - DECIDE LATER
   # https://stats.idre.ucla.edu/other/mult-pkg/faq/general/faq-what-are-pseudo-r-squareds/
@@ -2038,21 +2087,15 @@ if(model_num == 2) {
   # RUN MODEL
   ################
   
-  # Print the name of the dependent variable (before renaming it)
-  print(paste("Dependent variable:", colnames(model_df)[ncol(model_df)]))
-  
-  # Rename dependent variable
-  colnames(model_df)[ncol(model_df)] = "dep_var"
-  
   # Loop while there's significant P-Values in the model (i.e. > 0.05) until only significant P-Values remain
   #Removes insignificant variables one at a time by the highest P-value
-  for(loop_n in 1:(ncol(model_df)-1)) {
+  for(loop_n in 1:(ncol(trainSplit)-1)) {
     
     # Run first iteration of the model
     if(loop_n == 1){
       
       # Run model
-      LRmodel <- glm(dep_var ~ ., family = gaussian, data = model_df, control = list(maxit = 50)) # Should this be gaussian or poisson? How to decide? Something else?
+      LRmodel <- glm(dep_var ~ ., family = gaussian, data = trainSplit, control = list(maxit = 50)) # Should this be gaussian or poisson? How to decide? Something else?
       
       # Print model output
       ptest<-data.frame(coef(summary(LRmodel)))
@@ -2070,7 +2113,7 @@ if(model_num == 2) {
       iter = iter + 1
       
       # Run model
-      LRmodel <- glm(dep_var ~ ., family = gaussian, data = model_df, control = list(maxit = 50))
+      LRmodel <- glm(dep_var ~ ., family = gaussian, data = trainSplit, control = list(maxit = 50))
       
       # Print model output
       ptest<-data.frame(coef(summary(LRmodel)))
@@ -2083,7 +2126,7 @@ if(model_num == 2) {
         drop_col <- str_replace_all(drop_col, "`", "")
         print(paste("Attribute with highest insignificant P-Value:", drop_col))
         
-        model_df <- model_df[,-(which(colnames(model_df)==drop_col))]
+        trainSplit <- trainSplit[,-(which(colnames(trainSplit)==drop_col))]
       }
       
     }
