@@ -27,6 +27,7 @@ library(data.table)
 library(fastDummies)
 library(xlsx)
 library(caret)
+library(pROC)
 
 # Set working directory
 setwd("C:\\Users\\katie\\Dropbox\\Grad School - Business Analytics Masters Program\\2019 Fall Classes\\Pear Deck - Analytics Experience\\R Scripts")
@@ -1760,7 +1761,7 @@ df_wide2 <- df_wide[,-c(1:6,8:10, 12, 18:27, 31:33, 36, 49)] # Note: one more re
 ################
 
 # Set model number (see models_list for key)
-model_num = 2
+model_num = 1
 
 # Set models_list
 models_list = list("prez_usage_binary", "total_prez_cont", "sub_status_free_binary", "sub_status_premium_binary", "sub_status_premiumtrial_binary", "clustering")
@@ -2001,31 +2002,15 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
     
   }
   
+  prediction <- predict(LRmodel, testSplit, type = "response")
+  
   ################
   # EVALUATE MODEL
   ################
   
-  ## 4 Ways to calculate the RMSE
-  # 1st
-  #sqrt(mean(Lmodel$residuals^2))
-  
-  # 2nd
-  # output <- predict(Lmodel, test)
-  # sqrt(mean(output$dep_var - output$prediction)^2)
-  
-  # 3rd
-  # sigma(Lmodel)
-  
-  # 4th
-  # RSS <- c(crossprod(Lmodel$residuals))
-  # MSE <- RSS / length(Lmodel$residuals)
-  # RMSE <- sqrt(MSE)
-  
-  ## 4 Ways to calculate the AUC
-  # 1st
-  # Library (pROC)
-  # Syntax (response, predictor)
-  # auc(output$dep_var, output$prediction)
+  # Calculate AUC
+  # Pseudo code: auc(response, predictor)
+  auc(testSplit$dep_var, testSplit$prediction)
   
   # 2nd
   # library (ROC)
@@ -2138,10 +2123,14 @@ if(model_num == 2) {
     
   }
   
+  output <- predict(LRmodel, testSplit)
+  
   ################
   # EVALUATE MODEL
   ################
   
+  # Generate RMSE
+  print(sqrt(mean(output$dep_var - output$prediction)^2))
   
 }
 
