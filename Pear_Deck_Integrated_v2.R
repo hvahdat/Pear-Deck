@@ -1715,7 +1715,7 @@ df_wide2 <- df_wide[,-c(1:6,8:10, 12, 18:27, 31:33, 35:36, 49)]
 df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Never Used"),]
 
 # SUBSET DATA: remove coaches and inspearational teachers
-#BigDF[ !(BigDF$ID %in% SmallDF$ID), ]
+#Pseudo code: BigDF[ !(BigDF$ID %in% SmallDF$ID), ]
 df_wide2 <- df_wide2[ !(df_wide2$teacher %in% df_coach_insp$hashed_coach_id), ]
 
 ################
@@ -1760,7 +1760,7 @@ df_wide2 <- df_wide[,-c(1:6,8:10, 12, 18:27, 31:33, 36, 49)] # Note: one more re
 ################
 
 # Set model number (see models_list for key)
-model_num = 5
+model_num = 2
 
 # Set models_list
 models_list = list("prez_usage_binary", "total_prez_cont", "sub_status_free_binary", "sub_status_premium_binary", "sub_status_premiumtrial_binary", "clustering")
@@ -1884,14 +1884,19 @@ if(model_num == 1) {
   model_df <- model_df[,-c(which(colnames(model_df)=="total_prez_aud_label" | colnames(model_df)=="usage_label_initial_months"))]
 } 
 
-# Print the name of the dependent variable (before renaming it)
-print(paste("Dependent variable:", colnames(model_df)[ncol(model_df)]))
-
-# Rename dependent variable
-colnames(model_df)[ncol(model_df)] = "dep_var"
-
-# Turn dependent variable into a factor
-model_df$dep_var <- as.factor(model_df$dep_var)
+if(model_num != 6){
+  # Print the name of the dependent variable (before renaming it)
+  print(paste("Dependent variable:", colnames(model_df)[ncol(model_df)]))
+  
+  # Rename dependent variable
+  colnames(model_df)[ncol(model_df)] = "dep_var"
+  
+  if(model_num != 2){
+    # Turn dependent variable into a factor
+    model_df$dep_var <- as.factor(model_df$dep_var)
+  }
+  
+}
 
 ###########################################
 # SPLIT TRAIN/TEST: Model Specific
@@ -2140,7 +2145,7 @@ if(model_num == 2) {
   
 }
 
-# Last code update: 12/7/19
+# Last code update: 12/8/19
 
 ##############################################################################
 # Analysis
