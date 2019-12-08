@@ -914,10 +914,12 @@ df_ae <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, ma
 df_ae$total <- rowSums(df_ae[,2:(ncol(df_ae))], na.rm=FALSE)
 
 # Turn all the counts into proportions (normalized using the sum of all app_events)
-
 for(n in 2:(ncol(df_ae)-1)) {
   df_ae[n] <- df_ae[n] / df_ae[(ncol(df_ae))]
 }
+
+# Remove the total column
+df_ae <- df_ae[, -ncol(df_ae)]
 
 ##############################################################################
 # Looping starts here
@@ -1710,12 +1712,14 @@ ggplot(data=df_wide2, aes(x=dep_total_presentations_yr_later, y=slideDiversity))
 # SUBSET DATA: for correlation review
 ################
 
+# Copy df_wide to df_wide2
+df_wide2 <- df_wide
+
 # SUBSET DATA: remove columns of disinterest to all models
-df_wide2 <- df_wide[,-c(1:6,8:10, 12, 18:27, 31:33, 35:36, 49)]
+df_wide2 <- df_wide2[,-c(1:6,8:10, 12, 18:27, 31:34, 35:36, 49)]
 
 # Remove PremiumTrial folks (since we can't tell if they're coaches/inspearational teachers)
 df_wide2 <- df_wide2[-which(df_wide2$dep_premiumtrial == 1), ]
-df_wide2 <- df_wide2[,-17]
 
 # SUBSET DATA: (remove "Never Used" during intial months)
 df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Never Used"),]
@@ -1723,6 +1727,20 @@ df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Never Used")
 # SUBSET DATA: remove coaches and inspearational teachers
 #Pseudo code: BigDF[ !(BigDF$ID %in% SmallDF$ID), ]
 df_wide2 <- df_wide2[ !(df_wide2$teacher %in% df_coach_insp$hashed_coach_id), ]
+
+## PICK WHICH TO EXCLUDE
+excl = 1
+
+if(excl==1){
+  # MAJORITY OF MODELS USE THIS SETUP
+  # Remove users who Never Used (initial months) or Tested Product Only (initial months) 
+  df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Tested Product Only"), -which(colnames(df_wide2)=="prez_usage_initial")]
+} else if (excl==2){
+  # Remove users who Never Used (initial months) or Tested Product Only (year later)
+  df_wide2 <- df_wide2[-which(df_wide2$usage_label_yr_later == "Tested Product Only"),]
+}
+
+df_wide2 <- df_wide2[, -which(colnames(df_wide2)=="dep_total_presentations_yr_later" | colnames(df_wide2)=="dep_prez_usage_yr_later" | colnames(df_wide2)=="dep_premium" | colnames(df_wide2)=="dep_free" | colnames(df_wide2)=="dep_premiumtrial" | colnames(df_wide2)=="usage_label_initial_months")]
 
 ################
 # PREP DATA
@@ -1734,17 +1752,17 @@ sum(is.na(df_wide2))
 # Remove rows with missing data
 df_wide2 <- na.omit(df_wide2)
 
-# Create indicator variables
-test_dummies <- dummy_cols(df_wide2)
-# Remove original categorical variables
-df_corr <- test_dummies[,-c(which(colnames(test_dummies)=="usage_label_initial_months" | colnames(test_dummies)=="total_prez_aud_label"))]
+# # Create indicator variables
+# test_dummies <- dummy_cols(df_wide2)
+# # Remove original categorical variables
+# df_corr <- test_dummies[,-c(which(colnames(test_dummies)=="usage_label_initial_months" | colnames(test_dummies)=="total_prez_aud_label"))]
 
 ################
 # GENERATE CORRELATION MATRIX
 ################
 
 # Generate correlation data
-df_corr <- data.frame(cor(df_corr, method = c("pearson", "kendall", "spearman")))
+df_corr <- data.frame(cor(df_wide2, method = c("pearson", "kendall", "spearman")))
 
 # Export to Excel file
 write.xlsx(df_corr, "correlations.xlsx")
@@ -1938,7 +1956,7 @@ print(prop.table(table(testSplit$dep_var)))
 
 # Model #5 is very unbalanced and requires upsampling to rabalance the classes
 if(model_num == 5) {
-
+  
   # Check counts of each class
   #Original training data (80% of model_df data here)
   #Heavy imbalance
