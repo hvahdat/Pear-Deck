@@ -1766,7 +1766,7 @@ df_wide2 <- na.omit(df_wide2)
 ################
 
 # Generate correlation data
-df_corr <- data.frame(cor(df_wide2, method = c("pearson", "kendall", "spearman")))
+df_corr <- data.frame(cor(df_wide2, method = "pearson")) #c("pearson", "kendall", "spearman")
 
 # Export to Excel file
 write.xlsx(df_corr, paste("correlations_v", excl, ".xlsx", sep=""))
@@ -1955,8 +1955,28 @@ if(inc_dummies == 0){
 
 # # Variables to remove due to multicollinearity
 # if(model_num ==1){
-#   model_df <- model_df[, -which(colnames(model_df)=="student_event_prop" | colnames(model_df)=="during_session_prop" | colnames(model_df)=="teacher_event_prop" | colnames(model_df)=="before_session_prop")]
+#   model_df <- model_df[, -which(colnames(model_df)=="student_event_prop" | colnames(model_df)=="during_session_prop" | colnames(model_df)=="teacher_event_prop")]
 # }
+
+# Variables to remove according to alias()
+if(model_num ==1){
+  model_df <- model_df[, -which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop")]
+}
+
+###########################################
+# EXAMINE FOR MULTICOLINEARITY
+###########################################
+
+# View the Variance Inflation Factor (VIF) of our variables
+vif <- as.data.frame(car::vif(LRmodel))
+
+# View the max VIF
+max(vif$`car::vif(LRmodel)`)
+
+# Use if vif() shows warning about alias coefficients in the model - remove these (in the columns) from the model
+# https://stackoverflow.com/questions/45328783/interpreting-alias-table-testing-multicollinearity-of-model-in-r/45971359
+# "Nonzero entries in the "complete" matrix show that those terms are linearly dependent on UseMonthly. This means they're highly correlated, but terms can be highly correlated without being linearly dependent."
+alias(LRmodel)
 
 
 ###########################################
@@ -2024,7 +2044,7 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
     if(loop_n == 1){
       
       # Run model
-      LRmodel <<- glm(dep_var ~ ., family = binomial, data = trainSplit, control = list(maxit = 50))
+      LRmodel <<- glm(dep_var ~ ., family = binomial, data = trainSplit, control = list(maxit = 50), singular.ok = TRUE)
       
       # Print model output
       ptest<<-data.frame(coef(summary(LRmodel)))
@@ -2184,7 +2204,7 @@ if(model_num == 2) {
   
 }
 
-# Last code update: 12/10/19
+# Last code update: 12/11/19
 
 ##############################################################################
 # Analysis
