@@ -1848,7 +1848,7 @@ model_df <- df_wide2
 remove_variables = as.integer()
 
 # Define subsetting function
-subset_cols <- function(v, dv, ULIM = FALSE, bv, bcrm = TRUE) {
+subset_cols <- function(v, dv, ULIM = FALSE, bv, bcrm = TRUE) { 
   # v = list of variables to remove
   # dv = dependent variable
   # ULIM = including usage_label_initial_months: TRUE/FALSE (default: FALSE)
@@ -1879,6 +1879,9 @@ subset_cols <- function(v, dv, ULIM = FALSE, bv, bcrm = TRUE) {
   if(bcrm == TRUE) {
   
     if(inc_dummies == 1){  
+      # Reinintialize variable
+      remove_variables = as.integer()
+      
       # Pull list of column numbers for each base case (dummy variables)
       for (varnum in 1:length(bv)) {
         remove_variables = append(remove_variables, which(colnames(model_df)== bv[[varnum]]), after = length(remove_variables))
@@ -1895,6 +1898,8 @@ subset_cols <- function(v, dv, ULIM = FALSE, bv, bcrm = TRUE) {
   # Reorder columns so dependent variable is last
   model_df <<- model_df[ ,c((1:ncol(model_df))[-dep_var_num], dep_var_num)]
 }
+# END subsetting function
+
 
 
 if(model_num == 1) {
@@ -1948,10 +1953,10 @@ if(inc_dummies == 0){
 
 }
 
-# Variables to remove due to multicollinearity
-if(model_num ==1){
-  model_df <- model_df[, -which(colnames(model_df)=="student_event_prop" | colnames(model_df)=="during_session_prop" | colnames(model_df)=="teacher_event_prop" | colnames(model_df)=="before_session_prop")]
-}
+# # Variables to remove due to multicollinearity
+# if(model_num ==1){
+#   model_df <- model_df[, -which(colnames(model_df)=="student_event_prop" | colnames(model_df)=="during_session_prop" | colnames(model_df)=="teacher_event_prop" | colnames(model_df)=="before_session_prop")]
+# }
 
 
 ###########################################
