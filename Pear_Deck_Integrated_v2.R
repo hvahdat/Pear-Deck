@@ -1716,7 +1716,7 @@ ggplot(data=df_wide2, aes(x=dep_total_presentations_yr_later, y=slideDiversity))
 df_wide2 <- df_wide
 
 # SUBSET DATA: remove columns of disinterest to all models
-df_wide2 <- df_wide2[,-c(1:6,8:10, 12, 18:27, 31:34, 35:36, 49)]
+df_wide2 <- df_wide2[,-c(1:6,8:10, 12, 18:27, 31:34, 36, 49)]
 
 # Remove PremiumTrial folks (since we can't tell if they're coaches/inspearational teachers)
 df_wide2 <- df_wide2[-which(df_wide2$dep_premiumtrial == 1), ]
@@ -1734,13 +1734,17 @@ excl = 1
 if(excl==1){
   # MAJORITY OF MODELS USE THIS SETUP
   # Remove users who Never Used (initial months) or Tested Product Only (initial months) 
-  df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Tested Product Only"), -which(colnames(df_wide2)=="prez_usage_initial")]
+  df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Tested Product Only"), -which(colnames(df_wide2)=="prez_usage_initial" | colnames(df_wide2)=="usage_label_yr_later")]
 } else if (excl==2){
   # Remove users who Never Used (initial months) or Tested Product Only (year later)
   df_wide2 <- df_wide2[-which(df_wide2$usage_label_yr_later == "Tested Product Only"),]
 }
 
-df_wide2 <- df_wide2[, -which(colnames(df_wide2)=="dep_total_presentations_yr_later" | colnames(df_wide2)=="dep_prez_usage_yr_later" | colnames(df_wide2)=="dep_premium" | colnames(df_wide2)=="dep_free" | colnames(df_wide2)=="dep_premiumtrial" | colnames(df_wide2)=="usage_label_initial_months")]
+# Remove dependent variables & other columns of disinterest
+df_wide2 <- df_wide2[, -which(colnames(df_wide2)=="dep_total_presentations_yr_later" | colnames(df_wide2)=="dep_prez_usage_yr_later" | colnames(df_wide2)=="dep_premium" | colnames(df_wide2)=="dep_free" | colnames(df_wide2)=="dep_premiumtrial" | colnames(df_wide2)=="usage_label_initial_months" | colnames(df_wide2)=="usage_label_yr_later")]
+
+# Remove binary variables
+df_wide2 <- df_wide2[, -which(colnames(df_wide2)=="ff_use" | colnames(df_wide2)=="prez_usage_initial" | colnames(df_wide2)=="participated_b4_used")]
 
 ################
 # PREP DATA
@@ -1765,11 +1769,14 @@ df_wide2 <- na.omit(df_wide2)
 df_corr <- data.frame(cor(df_wide2, method = c("pearson", "kendall", "spearman")))
 
 # Export to Excel file
-write.xlsx(df_corr, "correlations.xlsx")
-
+write.xlsx(df_corr, paste("correlations_v", excl, ".xlsx", sep=""))
 
 ###########################################
+###########################################
+#
 # SUBSET/PREP DATA: Model Specific
+#
+###########################################
 ###########################################
 
 ################
@@ -1789,6 +1796,8 @@ df_wide2 <- df_wide2[,-17]
 
 # Set model number (see models_list for key)
 model_num = 1
+# Set whether to run the model with dummy variables
+inc_dummies = 1 # 1 for yes; 0 for no
 
 # Set level of significance 
 sign_level = 0.1
@@ -1857,8 +1866,10 @@ subset_cols <- function(v, dv, ULIM = FALSE, bv, bcrm = TRUE) {
   # Remove variables of disinterest
   model_df <- model_df[,-c(remove_variables)]
   
-  # Create indicator variables
-  model_df <- dummy_cols(model_df)
+  if(inc_dummies == 1){
+    # Create indicator variables
+    model_df <- dummy_cols(model_df)
+  }
   
   # Remove original categorical variables
   model_df <- model_df[,-c(which(colnames(model_df)=="total_prez_aud_label"))]
@@ -1866,14 +1877,16 @@ subset_cols <- function(v, dv, ULIM = FALSE, bv, bcrm = TRUE) {
   if(ULIM == TRUE) { model_df <- model_df[,-c(which(colnames(model_df)=="usage_label_initial_months"))] }
   
   if(bcrm == TRUE) {
-    
-    # Pull list of column numbers for each base case (dummy variables)
-    for (varnum in 1:length(bv)) {
-      remove_variables = append(remove_variables, which(colnames(model_df)== bv[[varnum]]), after = length(remove_variables))
+  
+    if(inc_dummies == 1){  
+      # Pull list of column numbers for each base case (dummy variables)
+      for (varnum in 1:length(bv)) {
+        remove_variables = append(remove_variables, which(colnames(model_df)== bv[[varnum]]), after = length(remove_variables))
+      }
+      
+      # Remove base case(s) (dummy variables)
+      model_df <- model_df[,-c(remove_variables)]
     }
-    
-    # Remove base case(s) (dummy variables)
-    model_df <- model_df[,-c(remove_variables)]
   }
   
   # Set dependent variable
@@ -1928,6 +1941,18 @@ if(model_num != 6){
   }
   
 }
+
+if(inc_dummies == 0){
+
+  model_df <- model_df[, -which(colnames(model_df)=="ff_use" | colnames(model_df)=="prez_usage_initial" | colnames(model_df)=="participated_b4_used")]
+
+}
+
+# Variables to remove due to multicollinearity
+if(model_num ==1){
+  model_df <- model_df[, -which(colnames(model_df)=="student_event_prop" | colnames(model_df)=="during_session_prop" | colnames(model_df)=="teacher_event_prop" | colnames(model_df)=="before_session_prop")]
+}
+
 
 ###########################################
 # SPLIT TRAIN/TEST: Model Specific
@@ -2040,7 +2065,7 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   
   # Calculate AUC
   # Pseudo code: auc(response, predictor)
-  auc(testSplit$dep_var, testSplit$prediction)
+  auc <- auc(testSplit$dep_var, testSplit$prediction)
   
   # NOT SURE IF WE SHOULD USE OR NOT - DECIDE LATER
   # https://stats.idre.ucla.edu/other/mult-pkg/faq/general/faq-what-are-pseudo-r-squareds/
@@ -2062,12 +2087,15 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   accuracy <- (contable[4]+contable[1])/(contable[1]+contable[2]+contable[3]+contable[4])
   precision <- (contable[4])/(contable[4]+contable[2])
   recall <- (contable[4])/(contable[4]+contable[3])
+  specificity <- (contable[1]/(contable[1]+contable[2]))
   
+  print(paste("AUC: ", auc))
   print(paste("Accuracy: ", accuracy))
   print(paste("Precision: ", precision))
   print(paste("Recall: ", recall))
+  print(paste("Specificity: ", specificity))
   
-  print("The following variables were found to be significant at the 95% confidence level:")
+  print("The following variables were found to be significant at the 90% confidence level:")
   library(broom)
   results_tidy <- tidy(LRmodel)
   #kable(results_tidy$term[which(results_tidy$term != "(Intercept)")])
@@ -2151,7 +2179,7 @@ if(model_num == 2) {
   
 }
 
-# Last code update: 12/8/19
+# Last code update: 12/10/19
 
 ##############################################################################
 # Analysis
