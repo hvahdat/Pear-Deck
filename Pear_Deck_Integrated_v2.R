@@ -1578,6 +1578,22 @@ df_wide$participated_b4_used[which(is.na(df_wide$participated_b4_used))] <- 0
 # Merge in AE data
 df_wide <- merge(x = df_wide, y = df_ae, by = "teacher", all.x = TRUE)
 
+# Multiply proportions by 100 for easier interpretation later
+df_wide$total_students_dup_prop <- df_wide$total_students_dup_prop*100
+df_wide$prop_stu_Testing <- df_wide$prop_stu_Testing*100
+df_wide$prop_stu_Low <- df_wide$prop_stu_Low*100
+df_wide$`prop_stu_Low-Medium` <- df_wide$`prop_stu_Low-Medium`*100
+df_wide$prop_stu_Medium <- df_wide$prop_stu_Medium*100
+df_wide$prop_stu_High <- df_wide$prop_stu_High*100
+df_wide$prop_stu_valid_prez <- df_wide$prop_stu_valid_prez*100
+df_wide$slideDiversity <- df_wide$slideDiversity*100
+df_wide$teacher_event_prop <- df_wide$teacher_event_prop*100
+df_wide$student_event_prop <- df_wide$student_event_prop*100
+df_wide$before_session_prop <- df_wide$before_session_prop*100
+df_wide$during_session_prop <- df_wide$during_session_prop*100
+df_wide$after_session_prop <- df_wide$after_session_prop*100
+df_wide$before_signup_prop <- df_wide$before_signup_prop*100
+
 df_wide2 <- df_wide
 
 ##############################################################################
@@ -1702,74 +1718,74 @@ ggplot(data=df_wide2, aes(x=dep_total_presentations_yr_later, y=slideDiversity))
 # Model Work
 ##############################################################################
 
-###########################################
-# EXAMINE CORRELATION MATRIX for all relevant variables
-###########################################
-
-# Review for multicollinearity
-
-################
-# SUBSET DATA: for correlation review
-################
-
-# Copy df_wide to df_wide2
-df_wide2 <- df_wide
-
-# SUBSET DATA: remove columns of disinterest to all models
-df_wide2 <- df_wide2[,-c(1:6,8:10, 12, 18:27, 31:34, 36, 49)]
-
-# Remove PremiumTrial folks (since we can't tell if they're coaches/inspearational teachers)
-df_wide2 <- df_wide2[-which(df_wide2$dep_premiumtrial == 1), ]
-
-# SUBSET DATA: (remove "Never Used" during intial months)
-df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Never Used"),]
-
-# SUBSET DATA: remove coaches and inspearational teachers
-#Pseudo code: BigDF[ !(BigDF$ID %in% SmallDF$ID), ]
-df_wide2 <- df_wide2[ !(df_wide2$teacher %in% df_coach_insp$hashed_coach_id), ]
-
-## PICK WHICH TO EXCLUDE
-excl = 1
-
-if(excl==1){
-  # MAJORITY OF MODELS USE THIS SETUP
-  # Remove users who Never Used (initial months) or Tested Product Only (initial months) 
-  df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Tested Product Only"), -which(colnames(df_wide2)=="prez_usage_initial" | colnames(df_wide2)=="usage_label_yr_later")]
-} else if (excl==2){
-  # Remove users who Never Used (initial months) or Tested Product Only (year later)
-  df_wide2 <- df_wide2[-which(df_wide2$usage_label_yr_later == "Tested Product Only"),]
-}
-
-# Remove dependent variables & other columns of disinterest
-df_wide2 <- df_wide2[, -which(colnames(df_wide2)=="dep_total_presentations_yr_later" | colnames(df_wide2)=="dep_prez_usage_yr_later" | colnames(df_wide2)=="dep_premium" | colnames(df_wide2)=="dep_free" | colnames(df_wide2)=="dep_premiumtrial" | colnames(df_wide2)=="usage_label_initial_months" | colnames(df_wide2)=="usage_label_yr_later")]
-
-# Remove binary variables
-df_wide2 <- df_wide2[, -which(colnames(df_wide2)=="ff_use" | colnames(df_wide2)=="prez_usage_initial" | colnames(df_wide2)=="participated_b4_used")]
-
-################
-# PREP DATA
-################
-
-# Examine missing data 
-sum(is.na(df_wide2))
-
-# Remove rows with missing data
-df_wide2 <- na.omit(df_wide2)
-
-# # Create indicator variables
-# test_dummies <- dummy_cols(df_wide2)
-# # Remove original categorical variables
-# df_corr <- test_dummies[,-c(which(colnames(test_dummies)=="usage_label_initial_months" | colnames(test_dummies)=="total_prez_aud_label"))]
-
-################
-# GENERATE CORRELATION MATRIX
-################
-
-# Generate correlation data
-df_corr <- data.frame(cor(df_wide2, method = "pearson")) #c("pearson", "kendall", "spearman")
-
-# Export to Excel file
-write.xlsx(df_corr, paste("correlations_v", excl, ".xlsx", sep=""))
+# ###########################################
+# # EXAMINE CORRELATION MATRIX for all relevant variables
+# ###########################################
+# 
+# # Review for multicollinearity
+# 
+# ################
+# # SUBSET DATA: for correlation review
+# ################
+# 
+# # Copy df_wide to df_wide2
+# df_wide2 <- df_wide
+# 
+# # SUBSET DATA: remove columns of disinterest to all models
+# df_wide2 <- df_wide2[,-c(1:6,8:10, 12, 18:27, 31:34, 36, 49)]
+# 
+# # Remove PremiumTrial folks (since we can't tell if they're coaches/inspearational teachers)
+# df_wide2 <- df_wide2[-which(df_wide2$dep_premiumtrial == 1), ]
+# 
+# # SUBSET DATA: (remove "Never Used" during intial months)
+# df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Never Used"),]
+# 
+# # SUBSET DATA: remove coaches and inspearational teachers
+# #Pseudo code: BigDF[ !(BigDF$ID %in% SmallDF$ID), ]
+# df_wide2 <- df_wide2[ !(df_wide2$teacher %in% df_coach_insp$hashed_coach_id), ]
+# 
+# ## PICK WHICH TO EXCLUDE
+# excl = 1
+# 
+# if(excl==1){
+#   # MAJORITY OF MODELS USE THIS SETUP
+#   # Remove users who Never Used (initial months) or Tested Product Only (initial months) 
+#   df_wide2 <- df_wide2[-which(df_wide2$usage_label_initial_months == "Tested Product Only"), -which(colnames(df_wide2)=="prez_usage_initial" | colnames(df_wide2)=="usage_label_yr_later")]
+# } else if (excl==2){
+#   # Remove users who Never Used (initial months) or Tested Product Only (year later)
+#   df_wide2 <- df_wide2[-which(df_wide2$usage_label_yr_later == "Tested Product Only"),]
+# }
+# 
+# # Remove dependent variables & other columns of disinterest
+# df_wide2 <- df_wide2[, -which(colnames(df_wide2)=="dep_total_presentations_yr_later" | colnames(df_wide2)=="dep_prez_usage_yr_later" | colnames(df_wide2)=="dep_premium" | colnames(df_wide2)=="dep_free" | colnames(df_wide2)=="dep_premiumtrial" | colnames(df_wide2)=="usage_label_initial_months" | colnames(df_wide2)=="usage_label_yr_later")]
+# 
+# # Remove binary variables
+# df_wide2 <- df_wide2[, -which(colnames(df_wide2)=="ff_use" | colnames(df_wide2)=="prez_usage_initial" | colnames(df_wide2)=="participated_b4_used")]
+# 
+# ################
+# # PREP DATA
+# ################
+# 
+# # Examine missing data 
+# sum(is.na(df_wide2))
+# 
+# # Remove rows with missing data
+# df_wide2 <- na.omit(df_wide2)
+# 
+# # # Create indicator variables
+# # test_dummies <- dummy_cols(df_wide2)
+# # # Remove original categorical variables
+# # df_corr <- test_dummies[,-c(which(colnames(test_dummies)=="usage_label_initial_months" | colnames(test_dummies)=="total_prez_aud_label"))]
+# 
+# ################
+# # GENERATE CORRELATION MATRIX
+# ################
+# 
+# # Generate correlation data
+# df_corr <- data.frame(cor(df_wide2, method = "pearson")) #c("pearson", "kendall", "spearman")
+# 
+# # Export to Excel file
+# write.xlsx(df_corr, paste("correlations_v", excl, ".xlsx", sep=""))
 
 ###########################################
 ###########################################
@@ -1778,6 +1794,9 @@ write.xlsx(df_corr, paste("correlations_v", excl, ".xlsx", sep=""))
 #
 ###########################################
 ###########################################
+
+# Remove previous model's outputs (to avoid mistakes)
+rm(list=c("LRmodel","ptest","optCutOff","testSplit","trainSplit","model_df","auc","vif","accuracy","precision","recall","specificity"))
 
 ################
 # SUBSET: Columns across all models
@@ -1953,30 +1972,20 @@ if(inc_dummies == 0){
 
 }
 
+######## DELETE THIS SECTION
 # # Variables to remove due to multicollinearity
 # if(model_num ==1){
 #   model_df <- model_df[, -which(colnames(model_df)=="student_event_prop" | colnames(model_df)=="during_session_prop" | colnames(model_df)=="teacher_event_prop")]
 # }
+######## DELETE THIS SECTION
 
-# Variables to remove according to alias()
+
+# Variables to remove b/c show up in alias() and/or high VIF (Variance Inflation Factor)
 if(model_num ==1){
-  model_df <- model_df[, -which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop")]
+  # alias: prop_stu_High, after_session_prop
+  # VIF: teacher_event_prop, total_prez_aud_label_Light, student_event_prop, prop_stu_Testing
+  model_df <- model_df[, -which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop" | colnames(model_df)=="teacher_event_prop" | colnames(model_df)=="total_prez_aud_label_Light" | colnames(model_df)=="student_event_prop" | colnames(model_df)=="prop_stu_Testing")]
 }
-
-###########################################
-# EXAMINE FOR MULTICOLINEARITY
-###########################################
-
-# View the Variance Inflation Factor (VIF) of our variables
-vif <- as.data.frame(car::vif(LRmodel))
-
-# View the max VIF
-max(vif$`car::vif(LRmodel)`)
-
-# Use if vif() shows warning about alias coefficients in the model - remove these (in the columns) from the model
-# https://stackoverflow.com/questions/45328783/interpreting-alias-table-testing-multicollinearity-of-model-in-r/45971359
-# "Nonzero entries in the "complete" matrix show that those terms are linearly dependent on UseMonthly. This means they're highly correlated, but terms can be highly correlated without being linearly dependent."
-alias(LRmodel)
 
 
 ###########################################
@@ -2025,6 +2034,28 @@ if(model_num == 5) {
   
 }
 
+###########################################
+# EXAMINE FOR MULTICOLINEARITY
+###########################################
+
+# # Run if want to turn off scientific notation
+# library(questionr)
+# options(scipen = 999)
+
+# Run model
+LRmodel <- glm(dep_var ~ ., family = binomial, data = trainSplit, control = list(maxit = 50), singular.ok = TRUE)
+
+# View the Variance Inflation Factor (VIF) of our variables
+vif <- as.data.frame(car::vif(LRmodel))
+view(vif)
+
+# View the max VIF
+max(vif$`car::vif(LRmodel)`)
+
+# Use if vif() shows warning about alias coefficients in the model - remove these (in the columns) from the model
+# https://stackoverflow.com/questions/45328783/interpreting-alias-table-testing-multicollinearity-of-model-in-r/45971359
+# "Nonzero entries in the "complete" matrix show that those terms are linearly dependent on UseMonthly. This means they're highly correlated, but terms can be highly correlated without being linearly dependent."
+alias(LRmodel)
 
 ###########################################
 # MODEL: Logistic Regression
@@ -2088,6 +2119,30 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   # EVALUATE MODEL
   ################
   
+  # # install.packages("InformationValue")
+  # 
+  # # http://r-statistics.co/Logistic-Regression-With-R.html
+  # 
+  library(InformationValue)
+  # Initialize (in case we've run it previously)
+  optCutOff <- as.numeric(NA)
+  # Identify optimal cutoff
+  optCutOff <- InformationValue::optimalCutoff(testSplit$dep_var, testSplit$prediction, optimiseFor="Zeros", returnDiagnostics=TRUE)
+
+  # misClassError(testSplit$dep_var, testSplit$prediction, threshold = optCutOff)
+  # 
+  # # Plot ROC curve
+  # plotROC(testSplit$dep_var, testSplit$prediction)
+  # 
+  # 
+  # # Set model threshold/cutoff for what's considered the positive class
+  # testSplit$prediction_label <- ifelse(testSplit$prediction >= optCutOff, 1, 0)
+  # 
+  # 
+  # attr(pred, "probabilities") th=0.3 
+  # pred.probth <- (ifelse(pred.prob[,1]>=0.3,1,0)) 
+  # confusionMatrix(pred.probth, y)
+  
   # Calculate AUC
   # Pseudo code: auc(response, predictor)
   auc <- auc(testSplit$dep_var, testSplit$prediction)
@@ -2131,9 +2186,9 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   # For every 1 unit increase in x, the odds of the accident being a fatality is * coefficient. (>1 means going up. <1 means going down.)
   ptest <- data.frame(coef(summary(LRmodel)))
   #coef(summary(LRmodel))
-  odds <- data.frame(exp(LRmodel$coefficients))
+  oddsratio <- data.frame(exp(LRmodel$coefficients))
   #odds$exp.LRmodel.coefficients. <- round(odds$exp.LRmodel.coefficients.,3)
-  print(odds)
+  print(oddsratio)
   
 }
 
