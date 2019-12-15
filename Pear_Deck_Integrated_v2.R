@@ -29,6 +29,10 @@ library(xlsx)
 library(caret)
 library(pROC)
 library(knitr)
+library(questionr)
+
+# Turn off scientific notation
+options(scipen = 999)
 
 # Set working directory
 setwd("C:\\Users\\katie\\Dropbox\\Grad School - Business Analytics Masters Program\\2019 Fall Classes\\Pear Deck - Analytics Experience\\R Scripts")
@@ -1527,7 +1531,7 @@ for (k in 1:2) {
     df_sr_wide$subscription[which(is.na(df_sr_wide$subscription) == TRUE)] <- df_sr_wide$accountStatus_1yr_later[which(is.na(df_sr_wide$subscription) == TRUE)]
     
     # Create binary variable from Year Later data
-    df_sr_wide$dep_prez_usage_yr_later <- ifelse((df_sr_wide$total_presentations > 0 & df_sr_wide$usage_label != "Tested Product Only"), 0, 1)
+    df_sr_wide$dep_prez_usage_yr_later <- ifelse((df_sr_wide$total_presentations > 0 & df_sr_wide$usage_label != "Tested Product Only"), 1, 0)
     
     # Pull year later fields into Initial DF
     df_sr_wide_INITIAL$usage_label_yr_later <- df_sr_wide$usage_label
@@ -2065,10 +2069,6 @@ if(model_num == 1 | model_num == 5) {
 # EXAMINE FOR MULTICOLINEARITY
 ###########################################
 
-# # Run if want to turn off scientific notation
-# library(questionr)
-# options(scipen = 999)
-
 # Run model
 LRmodel <- glm(dep_var ~ ., family = binomial, data = trainSplit, control = list(maxit = 50), singular.ok = TRUE)
 
@@ -2145,90 +2145,79 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   
 }
   
-  ################
-  # EVALUATE MODEL
-  ################
-  
-  # # install.packages("InformationValue")
-  # 
-  # # http://r-statistics.co/Logistic-Regression-With-R.html
-  # 
-  library(InformationValue)
-  # Initialize (in case we've run it previously)
-  optCutOff <- as.numeric(NA)
-  # Identify optimal cutoff
-  optCutOff <- InformationValue::optimalCutoff(testSplit$dep_var, testSplit$prediction, optimiseFor="Zeros", returnDiagnostics=TRUE)
+################
+# EVALUATE MODEL
+################
 
-  # misClassError(testSplit$dep_var, testSplit$prediction, threshold = optCutOff)
-  # 
-  # # Plot ROC curve
-  # plotROC(testSplit$dep_var, testSplit$prediction)
-  # 
-  # 
-  # # Set model threshold/cutoff for what's considered the positive class
-  # testSplit$prediction_label <- ifelse(testSplit$prediction >= optCutOff, 1, 0)
-  # 
-  # 
-  # attr(pred, "probabilities") th=0.3 
-  # pred.probth <- (ifelse(pred.prob[,1]>=0.3,1,0)) 
-  # confusionMatrix(pred.probth, y)
+# Print Model Summary
+summary(LRmodel)
+
+print(paste("The following variables were found to be significant at the ", 1-sign_level ,"% confidence level:", sep = ""))
+library(broom)
+results_tidy <- tidy(LRmodel)
+print(results_tidy$term[which(results_tidy$term != "(Intercept)")])
+
+print("Below are the odds (exp(Beta)) of the accident being a fatality. Greater than 1 indicates increasing odds and less than 1 indicates decreasing odds.")
+#Examine model and coefficients
+# For every 1 unit increase in x, the odds of the accident being a fatality is * coefficient. (>1 means going up. <1 means going down.)
+ptest <- data.frame(coef(summary(LRmodel)))
+#coef(summary(LRmodel))
+oddsratio <- data.frame(exp(LRmodel$coefficients))
+#odds$exp.LRmodel.coefficients. <- round(odds$exp.LRmodel.coefficients.,3)
+print(oddsratio)
+
+# Order by prediction in descending order
+testSplit <- testSplit[order(testSplit$prediction, decreasing = TRUE), ]
+rownames(testSplit) <- 1:nrow(testSplit)
+
+# Initialize new column
+testSplit$prediction_label <- as.numeric(NA)
+
+# Initialize new columns
+testSplit$accuracy <- as.numeric(NA)
+testSplit$precision <- as.numeric(NA)
+testSplit$recall <- as.numeric(NA)
+testSplit$specificity <- as.numeric(NA)
+testSplit$f_1 <- as.numeric(NA)
   
-  # Print Model Summary
-  summary(LRmodel)
+for(npred in 1:nrow(testSplit)){
   
-  # Calculate AUC
-  # Pseudo code: auc(response, predictor)
-  auc <- auc(testSplit$dep_var, testSplit$prediction)
+  # Set cutoff value for positive class (>=)
+  cutoff = testSplit$prediction[npred]
+    
+  # Set label based on cutoff
+  testSplit$prediction_label <- ifelse(testSplit$prediction >= cutoff, 1, 0)
   
-  # # Calculate F-1 Score
-  # library(MLmetrics)
-  # F1_Score(testSplit$dep_var, testSplit$prediction, positive = NULL)
+  TN_FN_row = npred + 1
+  if(TN_FN_row > nrow(testSplit)){TN_FN_row = nrow(testSplit)}
   
-  # NOT SURE IF WE SHOULD USE OR NOT - DECIDE LATER
-  # https://stats.idre.ucla.edu/other/mult-pkg/faq/general/faq-what-are-pseudo-r-squareds/
-  library(rcompanion) #<-pseudo R-Squared
-  results_nk <- nagelkerke(LRmodel)
-  results_nk<-data.frame(as.matrix(results_nk))
-  results_nk<-data.frame(results_nk[2,])
-  print(results_nk)
+  library(caret)
+  pred <- as.factor(testSplit$prediction_label)
+  actual <- as.factor(testSplit$dep_var)
+  cm <- caret::confusionMatrix(pred, actual, positive = "1")
   
-  # Apply to TEST & examine accuracy
-  # pred_prob_lr<-predict(LRmodel, test, type = "response")
-  testSplit$prediction_label <- as.numeric(NA)
-  testSplit$prediction_label[which(testSplit$prediction > 0.65)] <- 0
-  testSplit$prediction_label[which(testSplit$prediction <= 0.65)] <- 1
-  contable <- table(testSplit$prediction_label,testSplit$dep_var)
-  print(contable)
-  #kable(contable, caption = "Confusion Matrix")
+  testSplit$accuracy[npred] <- (cm$table[4]+cm$table[1])/(cm$table[1]+cm$table[2]+cm$table[3]+cm$table[4])
+  testSplit$precision[npred] <- (cm$table[4])/(cm$table[4]+cm$table[2])
+  testSplit$recall[npred] <- (cm$table[4])/(cm$table[4]+cm$table[3])
+  testSplit$specificity[npred] <- (cm$table[1]/(cm$table[1]+cm$table[2]))
+  testSplit$f_1[npred] <- 2*( (testSplit$precision[npred]*testSplit$recall[npred]) / (testSplit$precision[npred]+testSplit$recall[npred]) )
   
-  accuracy <- (contable[4]+contable[1])/(contable[1]+contable[2]+contable[3]+contable[4])
-  precision <- (contable[4])/(contable[4]+contable[2])
-  recall <- (contable[4])/(contable[4]+contable[3])
-  specificity <- (contable[1]/(contable[1]+contable[2]))
-  f_1 <- 2*( (precision*recall) / (precision+recall) )
-  
-  print(paste("AUC: ", auc))
-  print(paste("Accuracy: ", accuracy))
-  print(paste("Precision: ", precision))
-  print(paste("Recall: ", recall))
-  print(paste("Specificity: ", specificity))
-  print(paste("F-1 Score: ", f_1))
-  
-  print("The following variables were found to be significant at the 90% confidence level:")
-  library(broom)
-  results_tidy <- tidy(LRmodel)
-  #kable(results_tidy$term[which(results_tidy$term != "(Intercept)")])
-  print(results_tidy$term[which(results_tidy$term != "(Intercept)")])
-  
-  print("Below are the odds (exp(Beta)) of the accident being a fatality. Greater than 1 indicates increasing odds and less than 1 indicates decreasing odds.")
-  #Examine model and coefficients
-  # For every 1 unit increase in x, the odds of the accident being a fatality is * coefficient. (>1 means going up. <1 means going down.)
-  ptest <- data.frame(coef(summary(LRmodel)))
-  #coef(summary(LRmodel))
-  oddsratio <- data.frame(exp(LRmodel$coefficients))
-  #odds$exp.LRmodel.coefficients. <- round(odds$exp.LRmodel.coefficients.,3)
-  print(oddsratio)
-  
+}
+
+# Turn NaNs into zeros
+testSplit$f_1 <- ifelse(is.nan(testSplit$f_1)==TRUE,0,testSplit$f_1)
+
+# Find the row with optimal cutoff based on F-1 Score
+optCutOff_row <- which(testSplit$f_1 == max(testSplit$f_1))
+
+# Print performance metrics
+print(paste("Optimal Cutoff: ", testSplit$prediction[optCutOff_row]))
+print(paste("AUC: ", auc(testSplit$dep_var, testSplit$prediction)))
+print(paste("Accuracy: ", testSplit$accuracy[optCutOff_row]))
+print(paste("Precision: ", testSplit$precision[optCutOff_row]))
+print(paste("Recall: ", testSplit$recall[optCutOff_row]))
+print(paste("Specificity: ", testSplit$specificity[optCutOff_row]))
+print(paste("F-1 Score: ", testSplit$f_1[optCutOff_row]))
 
 
 ###########################################
@@ -2298,7 +2287,7 @@ if(model_num == 2) {
   
 }
 
-# Last code update: 12/14/19
+# Last code update: 12/15/19
 
 ##############################################################################
 # Analysis
