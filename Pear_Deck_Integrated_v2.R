@@ -1289,7 +1289,7 @@ for (k in 1:2) {
   df_sr$num_students_label <- df_sr$num_students
   df_sr$num_students_label[which(df_sr$num_students <= 1)] <- "0_Testing"
   df_sr$num_students_label[which(df_sr$num_students >= 2 & df_sr$num_students <= 10)] <- "1_Low"
-  df_sr$num_students_label[which(df_sr$num_students >= 11 & df_sr$num_students <= 19)] <- "2_Low-Medium"
+  df_sr$num_students_label[which(df_sr$num_students >= 11 & df_sr$num_students <= 19)] <- "2_Low_Medium"
   df_sr$num_students_label[which(df_sr$num_students >= 20 & df_sr$num_students <= 30)] <- "3_Medium"
   df_sr$num_students_label[which(df_sr$num_students >= 31)] <- "4_High"
   
@@ -1527,7 +1527,7 @@ for (k in 1:2) {
     df_sr_wide$subscription[which(is.na(df_sr_wide$subscription) == TRUE)] <- df_sr_wide$accountStatus_1yr_later[which(is.na(df_sr_wide$subscription) == TRUE)]
     
     # Create binary variable from Year Later data
-    df_sr_wide$dep_prez_usage_yr_later <- ifelse((df_sr_wide$total_presentations > 0 & df_sr_wide$usage_label != "Tested Product Only"), 1, 0)
+    df_sr_wide$dep_prez_usage_yr_later <- ifelse((df_sr_wide$total_presentations > 0 & df_sr_wide$usage_label != "Tested Product Only"), 0, 1)
     
     # Pull year later fields into Initial DF
     df_sr_wide_INITIAL$usage_label_yr_later <- df_sr_wide$usage_label
@@ -1582,7 +1582,7 @@ df_wide <- merge(x = df_wide, y = df_ae, by = "teacher", all.x = TRUE)
 df_wide$total_students_dup_prop <- df_wide$total_students_dup_prop*100
 df_wide$prop_stu_Testing <- df_wide$prop_stu_Testing*100
 df_wide$prop_stu_Low <- df_wide$prop_stu_Low*100
-df_wide$`prop_stu_Low-Medium` <- df_wide$`prop_stu_Low-Medium`*100
+df_wide$prop_stu_Low_Medium <- df_wide$prop_stu_Low_Medium*100
 df_wide$prop_stu_Medium <- df_wide$prop_stu_Medium*100
 df_wide$prop_stu_High <- df_wide$prop_stu_High*100
 df_wide$prop_stu_valid_prez <- df_wide$prop_stu_valid_prez*100
@@ -1805,9 +1805,9 @@ rm(list=c("LRmodel","ptest","optCutOff","testSplit","trainSplit","model_df","auc
 # Remove columns of disinterest to all models (start fresh with df_wide again)
 df_wide2 <- df_wide[,-c(1:6,8:10, 12, 18:27, 31:33, 36, 49)] # Note: one more removed later
 
-# Remove PremiumTrial folks (since we can't tell if they're coaches/inspearational teachers)
 df_wide2 <- df_wide2[-which(df_wide2$dep_premiumtrial == 1), ]
 df_wide2 <- df_wide2[,-17]
+
 
 ################
 # SUBSET: Rows (model specific)
@@ -1817,9 +1817,11 @@ df_wide2 <- df_wide2[,-17]
 model_num = 1
 # Set whether to run the model with dummy variables
 inc_dummies = 1 # 1 for yes; 0 for no
+# Set whether to run against validation set
+validate = 0 # 1 for validation; 0 for test set
 
 # Set level of significance 
-sign_level = 0.1
+sign_level = 0.16
 
 # Set models_list
 models_list = list("prez_usage_binary", "total_prez_cont", "sub_status_free_binary", "sub_status_premium_binary", "sub_status_premiumtrial_binary", "clustering")
@@ -1846,7 +1848,7 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
 df_wide2 <- df_wide2[ !(df_wide2$teacher %in% df_coach_insp$hashed_coach_id), ]
 
 # Remove columns of disinterest to all models: usage_label_yr_later (needed it to screen out rows for model_num == 2)
-df_wide2 <- df_wide2[ ,-12]
+df_wide2 <- df_wide2[ ,-which(colnames(df_wide2)=="usage_label_yr_later")]
 
 # Examine missing data 
 sum(is.na(df_wide2))
@@ -1879,7 +1881,7 @@ subset_cols <- function(v, dv, ULIM = FALSE, bv, bcrm = TRUE) {
   
   # Pull list of column numbers for each variable to remove
   for (varnum in 1:length(variables)) {
-    remove_variables = append(remove_variables, which(colnames(model_df)== variables[[varnum]]), after = length(remove_variables))
+    remove_variables = append(remove_variables, which(colnames(model_df)== variables[[varnum]]), after = length(remove_variables)) #if(which(colnames(model_df)== variables[[varnum]]) != 0) {}
   }
   
   # Remove variables of disinterest
@@ -1903,7 +1905,7 @@ subset_cols <- function(v, dv, ULIM = FALSE, bv, bcrm = TRUE) {
       
       # Pull list of column numbers for each base case (dummy variables)
       for (varnum in 1:length(bv)) {
-        remove_variables = append(remove_variables, which(colnames(model_df)== bv[[varnum]]), after = length(remove_variables))
+        remove_variables = append(remove_variables, which(colnames(model_df)== bv[[varnum]]), after = length(remove_variables)) #if(which(colnames(model_df)== bv[[varnum]]) != 0) {}
       }
       
       # Remove base case(s) (dummy variables)
@@ -1923,7 +1925,7 @@ subset_cols <- function(v, dv, ULIM = FALSE, bv, bcrm = TRUE) {
 
 if(model_num == 1) {
   
-  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_premium", "dep_premiumtrial", "dep_free","prez_usage_initial"), dv ="dep_prez_usage_yr_later", bv="total_prez_aud_label_None")
+  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_premium", "dep_premiumtrial", "dep_free","prez_usage_initial"), dv ="dep_prez_usage_yr_later", bv="total_prez_aud_label_Light")
   
 } else if(model_num == 2) {
   
@@ -1984,7 +1986,12 @@ if(inc_dummies == 0){
 if(model_num ==1){
   # alias: prop_stu_High, after_session_prop
   # VIF: teacher_event_prop, total_prez_aud_label_Light, student_event_prop, prop_stu_Testing
-  model_df <- model_df[, -which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop" | colnames(model_df)=="teacher_event_prop" | colnames(model_df)=="total_prez_aud_label_Light" | colnames(model_df)=="student_event_prop" | colnames(model_df)=="prop_stu_Testing")]
+  
+  # Train / test split 
+  #model_df <- model_df[, -which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop" | colnames(model_df)=="teacher_event_prop" | colnames(model_df)=="student_event_prop")]
+  
+  # Train / test / validation split
+  model_df <- model_df[, -which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop" | colnames(model_df)=="teacher_event_prop" | colnames(model_df)=="student_event_prop")]
 }
 
 
@@ -1997,40 +2004,54 @@ set.seed(1234)
 
 # Randomly split into train and test sets
 splitIndex <- createDataPartition(model_df$dep_var,
-                                  p = .80,
+                                  p = .70,
                                   list = FALSE,
                                   times = 1)
 
-# 80% into train
+# 70% into train
 trainSplit <- model_df[splitIndex,]
 
-# 20% into test
-testSplit <- model_df[-splitIndex,]
+# 15% test / 15% validation
+#split into 30%
+test_validation <- model_df[-splitIndex,]
 
+#split 30% into 15%/15%
+splitIndex <- createDataPartition(test_validation$dep_var,
+                    p = .50,
+                    list = FALSE,
+                    times = 1)
+
+testSplit <- test_validation[splitIndex,]
+
+validationSplit <- test_validation[-splitIndex,]
 
 ###########################################
 # REBALANCE DATA: Model Specific
 ###########################################
 
 # Examine proportions of train vs test to ensure dependent variable is relatively balanced (close to 50/50)
+print(prop.table(table(model_df$dep_var)))
 print(prop.table(table(trainSplit$dep_var)))
 print(prop.table(table(testSplit$dep_var)))
+print(prop.table(table(validationSplit$dep_var)))
 
 # Model #5 is very unbalanced and requires upsampling to rabalance the classes
-if(model_num == 5) {
+if(model_num == 1 | model_num == 5) {
   
   # Check counts of each class
   #Original training data (80% of model_df data here)
   #Heavy imbalance
   table(trainSplit$dep_var)
   
-  # Upsample (train set only) on the premiumtrial variable
+  # Upsample (train set only) on the dependent variable
   dep_var <- as.factor(trainSplit$dep_var)
   trainSplit <- upSample(trainSplit, dep_var)
   
   #Checks out 1940 vs 1940 data points
   #Now balanced via the upsample
   table(trainSplit$dep_var)
+  
+  trainSplit <- trainSplit[,-ncol(trainSplit)]
   
 }
 
@@ -2091,7 +2112,7 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
       
       # Count iterations
       iter = iter + 1
-      
+        
       # Run model
       LRmodel <<- glm(dep_var ~ ., family = binomial, data = trainSplit, control = list(maxit = 50))
       
@@ -2110,10 +2131,13 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
       }
       
     }
-    
   }
   
+  if(validate == 1) {testSplit <- validationSplit}
+  
   testSplit$prediction <- predict(LRmodel, testSplit, type = "response")
+  
+}
   
   ################
   # EVALUATE MODEL
@@ -2143,9 +2167,16 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   # pred.probth <- (ifelse(pred.prob[,1]>=0.3,1,0)) 
   # confusionMatrix(pred.probth, y)
   
+  # Print Model Summary
+  summary(LRmodel)
+  
   # Calculate AUC
   # Pseudo code: auc(response, predictor)
   auc <- auc(testSplit$dep_var, testSplit$prediction)
+  
+  # # Calculate F-1 Score
+  # library(MLmetrics)
+  # F1_Score(testSplit$dep_var, testSplit$prediction, positive = NULL)
   
   # NOT SURE IF WE SHOULD USE OR NOT - DECIDE LATER
   # https://stats.idre.ucla.edu/other/mult-pkg/faq/general/faq-what-are-pseudo-r-squareds/
@@ -2158,8 +2189,8 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   # Apply to TEST & examine accuracy
   # pred_prob_lr<-predict(LRmodel, test, type = "response")
   testSplit$prediction_label <- as.numeric(NA)
-  testSplit$prediction_label[which(testSplit$prediction > 0.5)] <- 0
-  testSplit$prediction_label[which(testSplit$prediction <= 0.5)] <- 1
+  testSplit$prediction_label[which(testSplit$prediction > 0.65)] <- 0
+  testSplit$prediction_label[which(testSplit$prediction <= 0.65)] <- 1
   contable <- table(testSplit$prediction_label,testSplit$dep_var)
   print(contable)
   #kable(contable, caption = "Confusion Matrix")
@@ -2168,12 +2199,14 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   precision <- (contable[4])/(contable[4]+contable[2])
   recall <- (contable[4])/(contable[4]+contable[3])
   specificity <- (contable[1]/(contable[1]+contable[2]))
+  f_1 <- 2*( (precision*recall) / (precision+recall) )
   
   print(paste("AUC: ", auc))
   print(paste("Accuracy: ", accuracy))
   print(paste("Precision: ", precision))
   print(paste("Recall: ", recall))
   print(paste("Specificity: ", specificity))
+  print(paste("F-1 Score: ", f_1))
   
   print("The following variables were found to be significant at the 90% confidence level:")
   library(broom)
@@ -2190,7 +2223,7 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
   #odds$exp.LRmodel.coefficients. <- round(odds$exp.LRmodel.coefficients.,3)
   print(oddsratio)
   
-}
+
 
 ###########################################
 # MODEL: Linear Regression
