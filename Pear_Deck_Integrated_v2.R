@@ -1993,7 +1993,10 @@ if(model_num ==1){
   # Train / test / validation split
   model_df <- model_df[, -which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop" | colnames(model_df)=="teacher_event_prop" | colnames(model_df)=="student_event_prop")]
 }
-
+  
+if(model_num ==2){
+  model_df <- model_df[,-which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop" | colnames(model_df)=="usage_label_initial_months_Used Product")]
+}
 
 ###########################################
 # SPLIT TRAIN/TEST: Model Specific
