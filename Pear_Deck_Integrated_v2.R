@@ -1821,7 +1821,10 @@ inc_dummies = 1 # 1 for yes; 0 for no
 validate = 0 # 1 for validation; 0 for test set
 
 # Set level of significance 
-sign_level = 0.16
+if(model_num == 1){ sign_level = 0.16 
+} else if (model_num == 2) { sign_level = 0.05 
+} else if (model_num == 3) { sign_level = 0.05
+} else if (model_num == 4) { sign_level = 0.05}
 
 # Set models_list
 models_list = list("prez_usage_binary", "total_prez_cont", "sub_status_free_binary", "sub_status_premium_binary", "sub_status_premiumtrial_binary", "clustering")
@@ -1985,21 +1988,21 @@ if(inc_dummies == 0){
 # Variables to remove b/c show up in alias() and/or high VIF (Variance Inflation Factor)
 if(model_num ==1){
   # alias: prop_stu_High, after_session_prop
-  # VIF: teacher_event_prop, total_prez_aud_label_Light, student_event_prop, prop_stu_Testing
-  
-  # Train / test split 
-  #model_df <- model_df[, -which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop" | colnames(model_df)=="teacher_event_prop" | colnames(model_df)=="student_event_prop")]
+  # VIF: teacher_event_prop, student_event_prop
   
   # Train / test / validation split
   model_df <- model_df[, -which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop" | colnames(model_df)=="teacher_event_prop" | colnames(model_df)=="student_event_prop")]
-}
   
-if(model_num ==2){
+} else if(model_num ==2){
+  # alias: prop_stu_High, after_session_prop, usage_label_initial_months_Used Product
+  
   model_df <- model_df[,-which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop" | colnames(model_df)=="usage_label_initial_months_Used Product")]
+  
 }
 
+
 ###########################################
-# SPLIT TRAIN/TEST: Model Specific
+# SPLIT TRAIN/TEST/VALIDATION: Model Specific
 ###########################################
 
 # Set instance to serve as basis for random split (below)
@@ -2295,7 +2298,7 @@ if(model_num == 2) {
   
 }
 
-# Last code update: 12/11/19
+# Last code update: 12/14/19
 
 ##############################################################################
 # Analysis
