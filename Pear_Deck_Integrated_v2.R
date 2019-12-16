@@ -1373,22 +1373,6 @@ for (k in 1:2) {
   # Presented to 2+ went free
   df_sr_wide$usage_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1)] <- "Used Product"
   
-  #### CODE WAS USED WHEN SUBSCRIPTION STATUS & USAGE STATUS WERE COMBINED.
-  # # Create empty column
-  # df_sr_wide$status_label <- as.character("")
-  # 
-  # # Never used
-  # df_sr_wide$status_label[which( df_sr_wide$total_presentations == 0)] <- "Never Used"
-  # # Tested Product Only
-  # df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students <= 1)] <- "Tested Product Only"
-  # # Presented to 2+ went free
-  # df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & df_sr_wide$account_status_max == "free")] <- "Used Product Free"
-  # # Presented to 2+ went premium
-  # df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & df_sr_wide$account_status_max == "premium")] <- "Used Product Premium"
-  # # Presented to 2+ went premiumtrial
-  # df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & df_sr_wide$account_status_max == "premiumTrial")] <- "Used Product PremiumTrial"
-  # # Presented to 2+ but status unknown (i.e. they used the product in the 1st month but not the subsequent months in the time span)
-  # df_sr_wide$status_label[which( df_sr_wide$total_presentations > 0 & df_sr_wide$total_students > 1 & is.na(df_sr_wide$account_status_max) == TRUE)] <- "Used Product Unknown Status"
   
   #####################
   # ADD: slide diversity to df_sr_wide
@@ -1506,7 +1490,7 @@ for (k in 1:2) {
   df_sr_wide$total_prez_aud_label <- as.character(NA)
   # Add labels
   df_sr_wide$total_prez_aud_label[which(df_sr_wide$num_prez_audience == 0)] <- "0_None"
-  df_sr_wide$total_prez_aud_label[which(df_sr_wide$num_prez_audience > 0 & df_sr_wide$num_prez_audience <= 9)] <- "1_Light"
+  df_sr_wide$total_prez_aud_label[which(df_sr_wide$num_prez_audience >= 1 & df_sr_wide$num_prez_audience <= 9)] <- "1_Light"
   df_sr_wide$total_prez_aud_label[which(df_sr_wide$num_prez_audience >=10 & df_sr_wide$num_prez_audience <= 19)] <- "2_Medium"
   df_sr_wide$total_prez_aud_label[which(df_sr_wide$num_prez_audience >=20 & df_sr_wide$num_prez_audience <= 34)] <- "3_Heavy"
   df_sr_wide$total_prez_aud_label[which(df_sr_wide$num_prez_audience >= 35)] <- "4_Superuser"
@@ -1800,7 +1784,7 @@ ggplot(data=df_wide2, aes(x=dep_total_presentations_yr_later, y=slideDiversity))
 ###########################################
 
 # Remove previous model's outputs (to avoid mistakes)
-rm(list=c("LRmodel","ptest","optCutOff","testSplit","trainSplit","model_df","auc","vif","accuracy","precision","recall","specificity"))
+rm(list=c("LRmodel","ptest","optCutOff","testSplit","trainSplit","validationSplit","model_df","auc","vif","accuracy","precision","recall","specificity","cutoff","actual","pred","optCutOff","optCutOff_row","model_num","dep_var","drop_col","npred","inc_dummies","oddsratio","splitIndex","results_tidy","remove_variables","sign_level","TN_FN_row","validate"))
 
 ################
 # SUBSET: Columns across all models
@@ -1818,7 +1802,7 @@ df_wide2 <- df_wide2[,-17]
 ################
 
 # Set model number (see models_list for key)
-model_num = 1
+model_num = 3
 # Set whether to run the model with dummy variables
 inc_dummies = 1 # 1 for yes; 0 for no
 # Set whether to run against validation set
@@ -1827,8 +1811,8 @@ validate = 0 # 1 for validation; 0 for test set
 # Set level of significance 
 if(model_num == 1){ sign_level = 0.16 
 } else if (model_num == 2) { sign_level = 0.05 
-} else if (model_num == 3) { sign_level = 0.05
-} else if (model_num == 4) { sign_level = 0.05}
+} else if (model_num == 3) { sign_level = 0.15
+} else if (model_num == 4) { sign_level = 0.15}
 
 # Set models_list
 models_list = list("prez_usage_binary", "total_prez_cont", "sub_status_free_binary", "sub_status_premium_binary", "sub_status_premiumtrial_binary", "clustering")
@@ -1940,15 +1924,15 @@ if(model_num == 1) {
   
 } else if(model_num == 3) {
   
-  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premium", "dep_premiumtrial","prez_usage_initial"), dv = "dep_free", bv="total_prez_aud_label_None")
+  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premium", "dep_premiumtrial","prez_usage_initial"), dv = "dep_free", bv="total_prez_aud_label_Light")
   
 } else if(model_num == 4) {
   
-  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premiumtrial", "dep_free","prez_usage_initial"), dv = "dep_premium", bv="total_prez_aud_label_None")
+  subset_cols(v = c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premiumtrial", "dep_free","prez_usage_initial"), dv = "dep_premium", bv="total_prez_aud_label_Light")
   
 } else if(model_num == 5) {
   
-  subset_cols(v =  c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premium", "dep_free","prez_usage_initial"), dv = "dep_premiumtrial", bv="total_prez_aud_label_None") 
+  subset_cols(v =  c("usage_label_initial_months", "dep_total_presentations_yr_later", "dep_prez_usage_yr_later", "dep_premium", "dep_free","prez_usage_initial"), dv = "dep_premiumtrial", bv="total_prez_aud_label_Light") 
   
 } else if(model_num == 6) {
   
@@ -1981,27 +1965,30 @@ if(inc_dummies == 0){
 
 }
 
-######## DELETE THIS SECTION
-# # Variables to remove due to multicollinearity
-# if(model_num ==1){
-#   model_df <- model_df[, -which(colnames(model_df)=="student_event_prop" | colnames(model_df)=="during_session_prop" | colnames(model_df)=="teacher_event_prop")]
-# }
-######## DELETE THIS SECTION
-
-
-# Variables to remove b/c show up in alias() and/or high VIF (Variance Inflation Factor)
-if(model_num ==1){
+# Variables to remove due to multicollinearity (i.e. either show up in alias() and/or high VIF (Variance Inflation Factor))
+if(model_num == 1){
   # alias: prop_stu_High, after_session_prop
   # VIF: teacher_event_prop, student_event_prop
   
   # Train / test / validation split
   model_df <- model_df[, -which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop" | colnames(model_df)=="teacher_event_prop" | colnames(model_df)=="student_event_prop")]
   
-} else if(model_num ==2){
+} else if(model_num == 2){
   # alias: prop_stu_High, after_session_prop, usage_label_initial_months_Used Product
   
   model_df <- model_df[,-which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop" | colnames(model_df)=="usage_label_initial_months_Used Product")]
   
+} else if(model_num == 3){
+  # alias: prop_stu_High, after_session_prop
+  # VIF: teacher_event_prop, student_event_prop, prop_stu_Testing (12.8)
+  
+  model_df <- model_df[,-which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop" | colnames(model_df)=="teacher_event_prop" | colnames(model_df)=="student_event_prop" | colnames(model_df)=="prop_stu_Testing")]
+
+} else if(model_num == 4){
+  # alias: prop_stu_High, after_session_prop
+  # VIF: student_event_prop, teacher_event_prop, prop_stu_Testing (11.679498)
+  
+  model_df <- model_df[,-which(colnames(model_df)=="prop_stu_High" | colnames(model_df)=="after_session_prop" | colnames(model_df)=="student_event_prop" | colnames(model_df)=="teacher_event_prop" | colnames(model_df)=="prop_stu_Testing")]
 }
 
 
@@ -2009,80 +1996,92 @@ if(model_num ==1){
 # SPLIT TRAIN/TEST/VALIDATION: Model Specific
 ###########################################
 
-# Set instance to serve as basis for random split (below)
-set.seed(1234)
-
-# Randomly split into train and test sets
-splitIndex <- createDataPartition(model_df$dep_var,
-                                  p = .70,
-                                  list = FALSE,
-                                  times = 1)
-
-# 70% into train
-trainSplit <- model_df[splitIndex,]
-
-# 15% test / 15% validation
-#split into 30%
-test_validation <- model_df[-splitIndex,]
-
-#split 30% into 15%/15%
-splitIndex <- createDataPartition(test_validation$dep_var,
-                    p = .50,
-                    list = FALSE,
-                    times = 1)
-
-testSplit <- test_validation[splitIndex,]
-
-validationSplit <- test_validation[-splitIndex,]
+if(model_num != 6){
+  # Set instance to serve as basis for random split (below)
+  set.seed(1234)
+  
+  # Randomly split into two sets
+  splitIndex <- createDataPartition(model_df$dep_var,
+                                    p = .70,
+                                    list = FALSE,
+                                    times = 1)
+  
+  # 70% into train
+  trainSplit <- model_df[splitIndex,]
+  
+  # 30% will go towards test & validation (15% test / 15% validation)
+  test_validation <- model_df[-splitIndex,]
+  
+  # Create index for split on remaining 30%
+  splitIndex <- createDataPartition(test_validation$dep_var,
+                      p = .50,
+                      list = FALSE,
+                      times = 1)
+  
+  # Create testSplit
+  testSplit <- test_validation[splitIndex,]
+  
+  # Create validationSplit
+  validationSplit <- test_validation[-splitIndex,]
+  
+  # Remove test_validation - not needed anymore
+  rm(list="test_validation")
+}
 
 ###########################################
 # REBALANCE DATA: Model Specific
 ###########################################
 
-# Examine proportions of train vs test to ensure dependent variable is relatively balanced (close to 50/50)
-print(prop.table(table(model_df$dep_var)))
-print(prop.table(table(trainSplit$dep_var)))
-print(prop.table(table(testSplit$dep_var)))
-print(prop.table(table(validationSplit$dep_var)))
-
-# Model #5 is very unbalanced and requires upsampling to rabalance the classes
-if(model_num == 1 | model_num == 5) {
+if(model_num != 6){
+  # Examine proportions of train vs test to ensure dependent variable is relatively balanced (close to 50/50)
+  print(prop.table(table(model_df$dep_var)))
+  print(prop.table(table(trainSplit$dep_var)))
+  print(prop.table(table(testSplit$dep_var)))
+  print(prop.table(table(validationSplit$dep_var)))
   
-  # Check counts of each class
-  #Original training data (80% of model_df data here)
-  #Heavy imbalance
-  table(trainSplit$dep_var)
-  
-  # Upsample (train set only) on the dependent variable
-  dep_var <- as.factor(trainSplit$dep_var)
-  trainSplit <- upSample(trainSplit, dep_var)
-  
-  #Checks out 1940 vs 1940 data points
-  #Now balanced via the upsample
-  table(trainSplit$dep_var)
-  
-  trainSplit <- trainSplit[,-ncol(trainSplit)]
-  
+  # If model is very unbalanced, then upsample to rebalance the classes
+  if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
+    
+    # Check counts of each class
+    #Original training data (80% of model_df data here)
+    #Heavy imbalance
+    print("Before rebalancing:")
+    print(table(trainSplit$dep_var))
+    
+    # Upsample (train set only) on the dependent variable
+    dep_var <- as.factor(trainSplit$dep_var)
+    trainSplit <- upSample(trainSplit, dep_var)
+    
+    #Checks out 1940 vs 1940 data points
+    #Now balanced via the upsample
+    print("After rebalancing:")
+    print(table(trainSplit$dep_var))
+    
+    trainSplit <- trainSplit[,-ncol(trainSplit)]
+    
+  }
 }
 
 ###########################################
-# EXAMINE FOR MULTICOLINEARITY
+# EXAMINE FOR MULTICOLLINEARITY
 ###########################################
 
-# Run model
-LRmodel <- glm(dep_var ~ ., family = binomial, data = trainSplit, control = list(maxit = 50), singular.ok = TRUE)
-
-# View the Variance Inflation Factor (VIF) of our variables
-vif <- as.data.frame(car::vif(LRmodel))
-view(vif)
-
-# View the max VIF
-max(vif$`car::vif(LRmodel)`)
-
-# Use if vif() shows warning about alias coefficients in the model - remove these (in the columns) from the model
-# https://stackoverflow.com/questions/45328783/interpreting-alias-table-testing-multicollinearity-of-model-in-r/45971359
-# "Nonzero entries in the "complete" matrix show that those terms are linearly dependent on UseMonthly. This means they're highly correlated, but terms can be highly correlated without being linearly dependent."
-alias(LRmodel)
+if(model_num != 6){
+  # Run model
+  LRmodel <- glm(dep_var ~ ., family = binomial, data = trainSplit, control = list(maxit = 50), singular.ok = TRUE)
+  
+  # View the Variance Inflation Factor (VIF) of our variables
+  vif <- as.data.frame(car::vif(LRmodel))
+  view(vif)
+  
+  # View the max VIF
+  max(vif$`car::vif(LRmodel)`)
+  
+  # Use if vif() shows warning about alias coefficients in the model - remove these (in the columns) from the model
+  # https://stackoverflow.com/questions/45328783/interpreting-alias-table-testing-multicollinearity-of-model-in-r/45971359
+  # "Nonzero entries in the "complete" matrix show that those terms are linearly dependent on UseMonthly. This means they're highly correlated, but terms can be highly correlated without being linearly dependent."
+  alias(LRmodel)
+}
 
 ###########################################
 # MODEL: Logistic Regression
@@ -2149,75 +2148,81 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
 # EVALUATE MODEL
 ################
 
-# Print Model Summary
-summary(LRmodel)
-
-print(paste("The following variables were found to be significant at the ", 1-sign_level ,"% confidence level:", sep = ""))
-library(broom)
-results_tidy <- tidy(LRmodel)
-print(results_tidy$term[which(results_tidy$term != "(Intercept)")])
-
-print("Below are the odds (exp(Beta)) of the accident being a fatality. Greater than 1 indicates increasing odds and less than 1 indicates decreasing odds.")
-#Examine model and coefficients
-# For every 1 unit increase in x, the odds of the accident being a fatality is * coefficient. (>1 means going up. <1 means going down.)
-ptest <- data.frame(coef(summary(LRmodel)))
-#coef(summary(LRmodel))
-oddsratio <- data.frame(exp(LRmodel$coefficients))
-#odds$exp.LRmodel.coefficients. <- round(odds$exp.LRmodel.coefficients.,3)
-print(oddsratio)
-
-# Order by prediction in descending order
-testSplit <- testSplit[order(testSplit$prediction, decreasing = TRUE), ]
-rownames(testSplit) <- 1:nrow(testSplit)
-
-# Initialize new column
-testSplit$prediction_label <- as.numeric(NA)
-
-# Initialize new columns
-testSplit$accuracy <- as.numeric(NA)
-testSplit$precision <- as.numeric(NA)
-testSplit$recall <- as.numeric(NA)
-testSplit$specificity <- as.numeric(NA)
-testSplit$f_1 <- as.numeric(NA)
+if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
+  # Print Model Summary
+  summary(LRmodel)
   
-for(npred in 1:nrow(testSplit)){
+  print(paste("The following variables were found to be significant at the ", 1-sign_level ,"% confidence level:", sep = ""))
+  library(broom)
+  results_tidy <- tidy(LRmodel)
+  print(results_tidy$term[which(results_tidy$term != "(Intercept)")])
   
-  # Set cutoff value for positive class (>=)
-  cutoff = testSplit$prediction[npred]
+  print("Below are the odds (exp(Beta)) of the accident being a fatality. Greater than 1 indicates increasing odds and less than 1 indicates decreasing odds.")
+  #Examine model and coefficients
+  # For every 1 unit increase in x, the odds of the accident being a fatality is * coefficient. (>1 means going up. <1 means going down.)
+  ptest <- data.frame(coef(summary(LRmodel)))
+  #coef(summary(LRmodel))
+  oddsratio <- data.frame(exp(LRmodel$coefficients))
+  #odds$exp.LRmodel.coefficients. <- round(odds$exp.LRmodel.coefficients.,3)
+  print(oddsratio)
+  
+  # Order by prediction in descending order
+  testSplit <- testSplit[order(testSplit$prediction, decreasing = TRUE), ]
+  rownames(testSplit) <- 1:nrow(testSplit)
+  
+  # Initialize new column
+  testSplit$prediction_label <- as.numeric(NA)
+  
+  # Initialize new columns
+  testSplit$accuracy <- as.numeric(NA)
+  testSplit$precision <- as.numeric(NA)
+  testSplit$recall <- as.numeric(NA)
+  testSplit$specificity <- as.numeric(NA)
+  testSplit$f_1 <- as.numeric(NA)
     
-  # Set label based on cutoff
+  for(npred in 1:nrow(testSplit)){
+    
+    # Set cutoff value for positive class (>=)
+    cutoff = testSplit$prediction[npred]
+      
+    # Set label based on cutoff
+    testSplit$prediction_label <- ifelse(testSplit$prediction >= cutoff, 1, 0)
+    
+    TN_FN_row = npred + 1
+    if(TN_FN_row > nrow(testSplit)){TN_FN_row = nrow(testSplit)}
+    
+    library(caret)
+    pred <- as.factor(testSplit$prediction_label)
+    actual <- as.factor(testSplit$dep_var)
+    cm <- caret::confusionMatrix(pred, actual, positive = "1")
+    
+    testSplit$accuracy[npred] <- (cm$table[4]+cm$table[1])/(cm$table[1]+cm$table[2]+cm$table[3]+cm$table[4])
+    testSplit$precision[npred] <- (cm$table[4])/(cm$table[4]+cm$table[2])
+    testSplit$recall[npred] <- (cm$table[4])/(cm$table[4]+cm$table[3])
+    testSplit$specificity[npred] <- (cm$table[1]/(cm$table[1]+cm$table[2]))
+    testSplit$f_1[npred] <- 2*( (testSplit$precision[npred]*testSplit$recall[npred]) / (testSplit$precision[npred]+testSplit$recall[npred]) )
+    
+  }
+  
+  # Turn NaNs into zeros
+  testSplit$f_1 <- ifelse(is.nan(testSplit$f_1)==TRUE,0,testSplit$f_1)
+  
+  # Find the row with optimal cutoff based on F-1 Score
+  optCutOff_row <- which(testSplit$f_1 == max(testSplit$f_1))
+  
+  # Set label based on optimal cutoff
+  cutoff = testSplit$prediction[optCutOff_row]
   testSplit$prediction_label <- ifelse(testSplit$prediction >= cutoff, 1, 0)
   
-  TN_FN_row = npred + 1
-  if(TN_FN_row > nrow(testSplit)){TN_FN_row = nrow(testSplit)}
-  
-  library(caret)
-  pred <- as.factor(testSplit$prediction_label)
-  actual <- as.factor(testSplit$dep_var)
-  cm <- caret::confusionMatrix(pred, actual, positive = "1")
-  
-  testSplit$accuracy[npred] <- (cm$table[4]+cm$table[1])/(cm$table[1]+cm$table[2]+cm$table[3]+cm$table[4])
-  testSplit$precision[npred] <- (cm$table[4])/(cm$table[4]+cm$table[2])
-  testSplit$recall[npred] <- (cm$table[4])/(cm$table[4]+cm$table[3])
-  testSplit$specificity[npred] <- (cm$table[1]/(cm$table[1]+cm$table[2]))
-  testSplit$f_1[npred] <- 2*( (testSplit$precision[npred]*testSplit$recall[npred]) / (testSplit$precision[npred]+testSplit$recall[npred]) )
-  
+  # Print performance metrics
+  print(paste("Optimal Cutoff: ", testSplit$prediction[optCutOff_row]))
+  print(paste("AUC: ", auc(testSplit$dep_var, testSplit$prediction)))
+  print(paste("Accuracy: ", testSplit$accuracy[optCutOff_row]))
+  print(paste("Precision: ", testSplit$precision[optCutOff_row]))
+  print(paste("Recall: ", testSplit$recall[optCutOff_row]))
+  print(paste("Specificity: ", testSplit$specificity[optCutOff_row]))
+  print(paste("F-1 Score: ", testSplit$f_1[optCutOff_row]))
 }
-
-# Turn NaNs into zeros
-testSplit$f_1 <- ifelse(is.nan(testSplit$f_1)==TRUE,0,testSplit$f_1)
-
-# Find the row with optimal cutoff based on F-1 Score
-optCutOff_row <- which(testSplit$f_1 == max(testSplit$f_1))
-
-# Print performance metrics
-print(paste("Optimal Cutoff: ", testSplit$prediction[optCutOff_row]))
-print(paste("AUC: ", auc(testSplit$dep_var, testSplit$prediction)))
-print(paste("Accuracy: ", testSplit$accuracy[optCutOff_row]))
-print(paste("Precision: ", testSplit$precision[optCutOff_row]))
-print(paste("Recall: ", testSplit$recall[optCutOff_row]))
-print(paste("Specificity: ", testSplit$specificity[optCutOff_row]))
-print(paste("F-1 Score: ", testSplit$f_1[optCutOff_row]))
 
 
 ###########################################
@@ -2276,18 +2281,29 @@ if(model_num == 2) {
     
   }
   
-  output <- predict(LRmodel, testSplit)
+  testSplit$prediction <- predict(LRmodel, testSplit)
   
   ################
   # EVALUATE MODEL
   ################
   
   # Generate RMSE
-  print(sqrt(mean(output$dep_var - output$prediction)^2))
+  print(paste("RMSE:", sqrt(mean(testSplit$dep_var - testSplit$prediction)^2)))
   
 }
 
-# Last code update: 12/15/19
+###########################################
+# MODEL: Clustering
+###########################################
+
+if(model_num == 6) {
+
+  library(rattle)
+  rattle()
+  
+}
+
+# Last code update: 12/16/19
 
 ##############################################################################
 # Analysis
