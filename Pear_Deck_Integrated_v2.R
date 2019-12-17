@@ -1802,11 +1802,11 @@ df_wide2 <- df_wide2[,-17]
 ################
 
 # Set model number (see models_list for key)
-model_num = 3
+model_num = 2
 # Set whether to run the model with dummy variables
 inc_dummies = 1 # 1 for yes; 0 for no
 # Set whether to run against validation set
-validate = 0 # 1 for validation; 0 for test set
+validate = 1 # 1 for validation; 0 for test set
 
 # Set level of significance 
 if(model_num == 1){ sign_level = 0.16 
@@ -2060,6 +2060,8 @@ if(model_num != 6){
     trainSplit <- trainSplit[,-ncol(trainSplit)]
     
   }
+  
+  if(validate == 1) {testSplit <- validationSplit}
 }
 
 ###########################################
@@ -2137,8 +2139,6 @@ if(model_num == 1 | model_num == 3 | model_num == 4 | model_num == 5) {
       
     }
   }
-  
-  if(validate == 1) {testSplit <- validationSplit}
   
   testSplit$prediction <- predict(LRmodel, testSplit, type = "response")
   
@@ -2288,7 +2288,7 @@ if(model_num == 2) {
   ################
   
   # Generate RMSE
-  print(paste("RMSE:", sqrt(mean(testSplit$dep_var - testSplit$prediction)^2)))
+  print(paste("RMSE:", sqrt(mean((testSplit$dep_var - testSplit$prediction)^2))))
   
 }
 
