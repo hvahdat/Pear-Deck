@@ -113,63 +113,6 @@ df_ppb4$participated_b4_used <- as.numeric(1)
 df_ppb4 <- df_ppb4[,c(1,4)]
 
 #####################
-# DATA PULL: Teachers who presented 5+ presentations in a year
-#####################
-
-# sql_string <- paste("SELECT teacher, 
-# CASE 
-# WHEN SUM(num_presentations) >= 5 THEN 1
-# ELSE 0
-# END as prez_5_plus
-# FROM
-# (
-#   SELECT 
-#   CAST(sp.externalid AS STRING) AS teacher,
-#   presentation_id,
-#   DATE(sp.timestamp) AS Date,
-#   EXTRACT(HOUR FROM sp.timestamp) AS hour,
-#   COUNT(DISTINCT sp.presentation_id) as num_presentations,
-#   COUNT(DISTINCT sr.student) as num_students
-#   
-#   FROM 
-#   
-#   (SELECT externalid, presentation_id, slide_id, timestamp, DATE(timestamp) as date, EXTRACT(HOUR FROM timestamp) as hour
-#   FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented` sp_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf_i 
-#   ON sp_i.user_id = uf_i.externalid
-#   WHERE 
-#   ((DATE(timestamp) BETWEEN DATE(FirstSeen) AND DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR)) 
-#   --OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
-#   --OR timestamp IS NULL)
-#   )
-#   AND (DATE(FirstSeen)", firstSeen, ") 
-#   AND profile_role <> 'student'
-#   ) sp 
-#   
-#   LEFT JOIN 
-#   
-#   (SELECT externalid, teacher, student, presentation, timestamp, slide, DATE(timestamp) as date, EXTRACT(HOUR FROM timestamp) as hour
-#   FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responses` sr_i RIGHT JOIN `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized` uf_i 
-#   ON sr_i.teacher = uf_i.externalid
-#   WHERE app not like '%flash%' 
-#   AND ((DATE(timestamp) BETWEEN DATE(FirstSeen) AND DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR)) 
-#   --OR (DATE(timestamp) BETWEEN DATE_ADD(DATE(FirstSeen), INTERVAL 1 YEAR) AND DATE_ADD(DATE_ADD(DATE(FirstSeen), INTERVAL 3 MONTH), INTERVAL 1 YEAR) 
-#   --OR timestamp IS NULL)
-#   )
-#   AND (DATE(FirstSeen) ", firstSeen, ")
-#   AND profile_role <> 'student'
-#   ) sr 
-#   
-#   ON sp.externalid = sr.externalid AND sp.slide_id = sr.slide AND sp.presentation_id = sr.presentation AND sp.date = sr.date AND sp.hour = sr.hour
-#   
-#   GROUP BY sp.externalid, presentation_id, DATE(sp.timestamp), EXTRACT(HOUR FROM sp.timestamp)
-#   --Note: count does not exactly equal what's in user facts if user hasn't launched a presentation ever.
-# ) z
-#   GROUP BY teacher"
-# )
-# 
-# df_5_plus <- query_exec(sql_string, project = project_id, use_legacy_sql = FALSE, max_pages = Inf)
-
-#####################
 # DATA PULL: app_events
 #####################
 
@@ -2304,13 +2247,3 @@ if(model_num == 6) {
 }
 
 # Last code update: 12/16/19
-
-##############################################################################
-# Analysis
-##############################################################################
-
-#Running Chi Square and One way ANOVA tests to test for significant diffences
-
-#Chi square test requires a table as an input, this makes sense b/c
-#Chi square compares categorical variable to categorical variable
-#One way Anova compares one categorical variable against a continuous variable
