@@ -1,0 +1,177 @@
+-- Exploring Usage of the Premium Slide Types
+WITH
+
+users AS (
+SELECT externalId, CASE WHEN primaryAccountDetails.currentlyPremium	 = false AND primaryAccountDetails.currentlyOnTrial = false THEN "free"
+WHEN primaryAccountDetails.currentlyPremium	 = true AND primaryAccountDetails.currentlyOnTrial = false THEN "premium"
+WHEN primaryAccountDetails.currentlyPremium	 = true AND primaryAccountDetails.currentlyOnTrial = true THEN "premiumtrial" END AS accountStatus, primaryAccountDetails.accountType
+FROM `production-segment-bq.internal_analysis_dataset.user_facts_anonymized`
+WHERE lastPresented >= "2019-08-01"
+GROUP BY 1,2,3 HAVING accountStatus is not null ),
+
+slideUsers AS(
+SELECT user_id, 
+sum(case when slide_type = 'freehandDrawing' then 1 else 0 end ) As drawingCount,
+sum(case when slide_type = 'draggable' then 1 else 0 end ) As draggableCount
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented`
+WHERE timestamp >= "2019-08-01"
+GROUP BY 1),
+
+d_usedSlides AS (
+SELECT user_id, drawingCount, draggableCount, accountStatus
+FROM slideUsers JOIN users ON (user_id = externalId)
+WHERE drawingCount = 0 AND draggableCount = 0),
+
+usedSlides AS (
+SELECT user_id, drawingCount, draggableCount, accountStatus
+FROM slideUsers JOIN users ON (user_id = externalId)
+WHERE drawingCount != 0 AND draggableCount != 0)
+
+SELECT count (distinct user_id) numUsers, accountStatus  FROM d_usedSlides GROUP BY 2
+
+-- More exploring of Slide Types
+WITH
+
+users AS (
+SELECT externalId, CASE WHEN primaryAccountDetails.currentlyPremium	 = false AND primaryAccountDetails.currentlyOnTrial = false THEN "free"
+WHEN primaryAccountDetails.currentlyPremium	 = true AND primaryAccountDetails.currentlyOnTrial = false THEN "premium"
+WHEN primaryAccountDetails.currentlyPremium	 = true AND primaryAccountDetails.currentlyOnTrial = true THEN "premiumtrial" END AS accountStatus, primaryAccountDetails.accountType
+FROM `production-segment-bq.internal_analysis_dataset.user_facts_anonymized`
+WHERE lastPresented >= "2019-08-01"
+GROUP BY 1,2,3 HAVING accountStatus is not null ),
+
+slideUsers AS(
+SELECT user_id, 
+sum(case when slide_type = 'freehandDrawing' then 1 else 0 end ) As drawingCount,
+sum(case when slide_type = 'draggable' then 1 else 0 end ) As draggableCount
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.slide_presented`
+WHERE timestamp >= "2019-08-01"
+GROUP BY 1),
+
+d_usedSlides AS (
+SELECT user_id, drawingCount, draggableCount, accountStatus
+FROM slideUsers JOIN users ON (user_id = externalId)
+WHERE drawingCount = 0 AND draggableCount = 0),
+
+usedSlides AS (
+SELECT user_id, drawingCount, draggableCount, accountStatus
+FROM slideUsers JOIN users ON (user_id = externalId)
+WHERE drawingCount != 0 AND draggableCount != 0)
+
+SELECT accountStatus, SUM(drawingCount) sumDrawing, SUM(draggableCount) sumDraggable  FROM d_usedSlides GROUP BY 1
+
+-- Exploring QQ Usage
+WITH
+
+users AS (
+SELECT externalId, CASE WHEN primaryAccountDetails.currentlyPremium	 = false AND primaryAccountDetails.currentlyOnTrial = false THEN "free"
+WHEN primaryAccountDetails.currentlyPremium	 = true AND primaryAccountDetails.currentlyOnTrial = false THEN "premium"
+WHEN primaryAccountDetails.currentlyPremium	 = true AND primaryAccountDetails.currentlyOnTrial = true THEN "premiumtrial" END AS accountStatus, primaryAccountDetails.accountType
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized`
+WHERE lastPresented >= "2019-08-01"
+GROUP BY 1,2,3 HAVING accountStatus is not null ),
+
+quickQuestionUsers AS (
+SELECT user_id, timestamp
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.presenter_button_clicked` 
+WHERE button = "control_bar_ask_a_question" AND timestamp >= "2019-08-01" AND timestamp <= "2019-12-01"),
+
+qqUsedStatus AS (
+SELECT externalID, accountStatus, accountType, timestamp
+FROM quickQuestionUsers s RIGHT JOIN users e 
+ON (user_id=externalId) WHERE user_id is not null),
+
+qqDidNotUseStatus AS (
+SELECT externalID, accountStatus, accountType, timestamp
+FROM quickQuestionUsers s RIGHT JOIN users e 
+ON (user_id=externalId) WHERE user_id is null)
+
+SELECT accountStatus, count(distinct externalID) distinctUsers FROM qqDidNotUseStatus GROUP BY accountStatus ORDER BY accountStatus
+
+-- Retention of QQ Users
+WITH  monthly_activity as (
+      SELECT distinct
+      date_trunc(date(timestamp), month) as month,
+      teacher user_id
+      FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responded`
+),    active_in_20172018 as (
+      SELECT *
+      FROM monthly_activity
+      WHERE month BETWEEN "2018-01-01" AND "2018-08-01"
+),    num_presentations1718 as (
+      SELECT teacher user_id, count (distinct presentation) num_presentations
+      FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responded`
+      WHERE timestamp >= "2018-01-01" AND timestamp <= "2018-08-01"
+      GROUP BY user_id
+      HAVING num_presentations > 1
+),    active_in_20172018_filter as (
+      SELECT user_id
+      FROM active_in_20172018 JOIN num_presentations1718
+      USING (user_id)
+),    quickQuestionUsers as (
+      SELECT user_id 
+      FROM `peardeck-external-projects.buisness_analytics_in_practice_project.presenter_button_clicked` 
+      WHERE button = "control_bar_ask_a_question" AND timestamp >= "2018-01-01" AND timestamp <= "2018-08-01"
+),    active_in_20172018_QQ as (
+      SELECT user_id
+      FROM active_in_20172018 JOIN quickQuestionUsers
+      USING (user_id)
+),    active_in_20182019 as (
+      SELECT *
+      FROM monthly_activity
+      WHERE month BETWEEN "2019-01-01" AND "2019-06-01"
+),    churned_accounts as (
+      SELECT s.user_id
+      FROM active_in_20172018_QQ s 
+      LEFT JOIN active_in_20182019 e 
+      ON s.user_id=e.user_id 
+	    WHERE e.user_id is null
+),    start_count as ( 
+	    SELECT count (distinct user_id) as n_start from active_in_20172018_QQ
+),    end_count as ( 
+	    SELECT 	count(distinct user_id) as n_end from active_in_20182019
+),    churn_count as (
+	    SELECT 	count(distinct user_id) as n_churn from churned_accounts
+)
+select 
+	CAST (n_churn/n_start as FLOAT64) as churn_rate,
+	CAST (1.0-(n_churn/n_start) as FLOAT64) as retention_rate,
+	n_start, n_end,	n_churn 
+FROM start_count, end_count, churn_count
+
+
+
+
+-- Teachers who had PD demonstrated to them before their first presentation
+WITH 
+Teachers1 AS (
+SELECT distinct teacher, min (timestamp) firstTimeTeacher
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responded`
+GROUP BY teacher
+),
+
+Teachers2 AS (
+SELECT distinct externalId
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.user_facts_anonymized`
+WHERE profile.role != "student"
+),
+
+Teachers AS (
+SELECT distinct teacher, firstTimeTeacher
+FROM Teachers1 JOIN Teachers2 ON teacher = externalId
+),
+
+Students AS (
+SELECT distinct student, min (timestamp) firstTimeStudent
+FROM `peardeck-external-projects.buisness_analytics_in_practice_project.student_responded`
+GROUP BY student
+),
+
+StudentTeachers AS (
+SELECT teacher, firstTimeTeacher, firstTimeStudent
+FROM Teachers JOIN Students ON teacher = student
+)
+
+SELECT teacher, firstTimeStudent, firstTimeTeacher
+FROM StudentTeachers
+WHERE firstTimeStudent < firstTimeTeacher
